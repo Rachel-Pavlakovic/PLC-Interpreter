@@ -39,11 +39,6 @@
 
 (define M_state)
 
-(define addValToState)
-(define addVarToState)
-(define removeFromState)
-(define getValueFromState)
-
 (define M_state_if
   (lambda (cond then else state)
     (if (M_bool cond state)
@@ -99,7 +94,9 @@
     (car e)))
 
 (define operand1 cadr)
-
 (define operand2 caddr)
+(define operand3 cadddr)
 
-(define M_bool)
+(define M_bool
+  (lambda (bool)
+    (or (eq? bool #t) (eq? bool #f))))
