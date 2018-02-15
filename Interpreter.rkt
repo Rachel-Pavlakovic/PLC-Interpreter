@@ -72,11 +72,11 @@
   (lambda (expr state)
     (cond
       ((null? expr) expr)
-      ((and (not (list? expr)) (number? expr)) expr)
-      ((and (not (list? expr)) (eqv? expr "true")) "true")
-      ((and (not (list? expr)) (eqv? expr "false")) "false")
-      ((not (list? expr)) (M_value_var expr state))
-      (else (M_value_int(expr))))))
+      ((and (not (pair? (cdr expr))) (number? (operator expr))) (operator expr))
+      ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) 'true)
+      ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) 'false)
+      ((not (pair? (cdr expr))) (M_value_var expr state))
+      (else (M_value_int expr)))))
 
 (define M_value_int
   (lambda (lis)
