@@ -5,6 +5,7 @@
 
 (require "simpleParser.scm")
 
+;Needs to be implemented
 (define interpret
   (lambda (fileName)
     ()))
@@ -37,7 +38,29 @@
       ((eq? (car (getVarLis state)) var) (car (getValLis state)))
       (else (getValueFromState var (list (cdar state) (cdadr state)))))))
 
-(define M_state)
+(define M_state
+  (lambda (x cond then else loopbody state)
+    (cond
+      ((eq? getKey(x) 'if) (M_state_if(cond then else state)))
+      ((eq? getKey(x) 'while) (M_state_while(cond loopbody state)))
+      ((eq? getKey(x) 'var) state)
+      ((eq? getKey(x) 'return) state)
+      ((eq? getKey(x) '=) (M_state_assign (getVar x) (getExpr) state))
+      ((member getKey(x) (expressions)) (M_state_expr x state ))
+      (else state))))
+    
+(define getKey
+  (lambda (line)
+    (car line)))
+(define getVar
+  (lambda (line)
+    (cadr line)))
+(define getExpr
+  (lambda (line)
+    (caddr line)))
+(define expressions
+  (lambda ()
+    '(+ - * / % < > <= >= == != || && !)))
 
 (define M_state_if
   (lambda (cond then else state)
@@ -56,8 +79,7 @@
     (addToState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))
     (removeFromeState var (M_state_expr expr state))))
 
-(define M_state_var
-  (lambda (var state)
+;(define M_state_var)
 
 (define M_state_expr
   (lambda (expr state)
@@ -66,19 +88,36 @@
       ((and (not (pair? (cdr expr))) (number? (operator expr))) state)
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) state)
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) state)
-      ((not (pair? (cdr expr))) (M_state_var expr state))
-      (else state))))
+      ((not (pair? (cdr expr))) state)
+      (else (M_state_stmt expr state)))))
 
+;Needs to be implemented
 (define M_state_stmt)
 
+;Needs to be implemented
 (define M_state_cond)
 
-(define M_value)
+(define M_value
+   (lambda (x state)
+    (cond
+      ((eq? getKey(x) 'var) (M_value_var x state))
+      ((eq? getKey(x) 'return) (M_value_return x state))
+      ((eq? getKey(x) '=) (M_value_assign x state)) 
+      ((member getKey(x) (expressions)) (M_value_expr x state ))
+      (else))))
 
 (define M_value_var
   (lambda (var state)
+    (getValueFromState var state)))
 
-(define M_value_assign)
+(define M_value_assign
+  (lambda (expr state)
+    (cond
+      ((null? expr))
+      ((number? (getExpr expr)) (getExpr expr))
+      ((or (eq? (getExpr expr) "true") (eq? (getExpr expr) "false")) (getExpr expr))
+      ((pair? (getExpr expr)) (M_value_expr (getExpr expr) state))
+      (else (getValueFromState (getExpr expr) state)))))
 
 (define M_value_return
   (lambda (expr state)
