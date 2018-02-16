@@ -68,9 +68,16 @@
         (M_state_stmt then state)
         (M_state_stmt else state))))
    
-(define M_state_while)
+(define M_state_while
+  (lambda (cond loopbody state)
+    (if (M_bool cond state)
+        (M_state_while cond loopbody (M_state_stmt loopbody (M_state_cond cond state)))
+        (M_state_cond cond state))))
 
-(define M_state_assign)
+(define M_state_assign
+  (lambda (var expr state)
+    (addToState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))
+    (removeFromeState var (M_state_expr expr state))))
 
 ;(define M_state_var)
 
@@ -117,7 +124,7 @@
     (cond
       ((null? expr) expr)
       (else (M_value_expr expr state)))))
-
+      
 (define M_value_expr
   (lambda (expr state)
     (cond
