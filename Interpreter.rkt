@@ -68,16 +68,9 @@
         (M_state_stmt then state)
         (M_state_stmt else state))))
    
-(define M_state_while
-  (lambda (cond loopbody state)
-    (if (M_bool cond state)
-        (M_state_while cond loopbody (M_state_stmt loopbody (M_state_cond cond state)))
-        (M_state_cond cond state))))
+(define M_state_while)
 
-(define M_state_assign
-  (lambda (var expr state)
-    (addToState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))
-    (removeFromeState var (M_state_expr expr state))))
+(define M_state_assign)
 
 ;(define M_state_var)
 
@@ -130,21 +123,48 @@
     (cond
       ((null? expr) expr)
       ((and (not (pair? (cdr expr))) (number? (operator expr))) (operator expr))
-      ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) 'true)
-      ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) 'false)
+      ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) #t)
+      ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) #f)
       ((not (pair? (cdr expr))) (M_value_var expr state))
-      (else (M_value_int expr)))))
+      ((or (eq? (operator expr) '+)(eq? (operator expr) '-)(eq? (operator expr) '*)(eq? (operator expr) '/)(eq? (operator expr) '%)) (M_value_int expr state))
+      ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state))
+      ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state))
+      (else (error badop)))))
 
 (define M_value_int
-  (lambda (lis)
+  (lambda (lis state)
     (cond
       ((number? lis) lis)
-      ((eq? '+ (operator lis)) (+ (M_value_int (operand1 lis)) (M_value_int (operand2 lis))))
-      ((eq? '- (operator lis)) (- (M_value_int (operand1 lis)) (M_value_int (operand2 lis))))
-      ((eq? '* (operator lis)) (* (M_value_int (operand1 lis)) (M_value_int (operand2 lis))))
-      ((eq? '/ (operator lis)) (quotient (M_value_int (operand1 lis)) (M_value_int (operand2 lis))))
-      ((eq? '% (operator lis)) (remainder (M_value_int (operand1 lis)) (M_value_int (operand2 lis))))
-      (else (error 'badop "Undefined operator")))))
+      ((eq? '+ (operator lis)) (+ (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
+      ((and (eq? '- (operator lis)) (not (pair? (operand4 lis)))) (- (M_value_int (operand1 lis) state)))
+      ((and (eq? '- (operator lis)) (pair? (operand4 lis))) (- (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
+      ((eq? '* (operator lis)) (* (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
+      ((eq? '/ (operator lis)) (quotient (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
+      ((eq? '% (operator lis)) (remainder (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
+      (else (M_value_expr lis state)))))
+
+(define M_value_bool
+  (lambda (lis state)
+    (cond
+      ((eq? lis 'true) #t)
+      ((eq? lis 'false) #f)
+      ((eq? '&& (operator lis)) (and (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
+      ((eq? '|| (operator lis)) (or (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
+      ((eq? '! (operator lis)) (not (M_value_bool (operand1 lis) state)))
+      (else (M_value_expr lis state)))))
+
+(define M_value_comp
+  (lambda (lis state)
+    (cond
+      ((number? lis) lis)
+      ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state) (M_value_comp (operand2 lis) state)))
+      ((eq? '< (operator lis)) (< (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
+      ((eq? '>= (operator lis)) (>= (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
+      ((eq? '<= (operator lis)) (<= (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
+      ((eq? '== (operator lis)) (eq? (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
+      ((eq? '!= (operator lis)) (not (eq? (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state))))
+      (else (M_value_expr lis state)))))
+
 
 (define operator
   (lambda (e)
@@ -153,7 +173,9 @@
 (define operand1 cadr)
 (define operand2 caddr)
 (define operand3 cadddr)
+(define operand4 cddr)
+    
 
 (define M_bool
-  (lambda (bool state)
+  (lambda (bool)
     (or (eq? bool #t) (eq? bool #f))))
