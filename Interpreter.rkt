@@ -79,6 +79,8 @@
     (addToState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))
     (removeFromeState var (M_state_expr expr state))))
 
+;(define M_state_var)
+
 (define M_state_expr
   (lambda (expr state)
     (cond
@@ -90,13 +92,17 @@
       (else (M_state_stmt expr state)))))
 
 ;Needs to be implemented
-(define M_state_stmt)
-
-(define M_state_cond
-  (lambda (con state)
+(define M_state_stmt
+  (lambda (stmt state)
     (cond
-      ((null? con) state)
+      ((null? stmt) state)
+      ((not (pair? stmt)) state)
+      ((eq? getKey(stmt) 'return) state)
+      ((eq? getKey(stmt) '=) (M_state_assign stmt))
       (else state))))
+
+;Needs to be implemented
+(define M_state_cond)
 
 (define M_value
    (lambda (x state)
@@ -110,10 +116,6 @@
 (define M_value_var
   (lambda (var state)
     (getValueFromState var state)))
-
-(define M_value_cond
-  (lambda (cond state)
-    (M_value_expr cond state)))
 
 (define M_value_assign
   (lambda (expr state)
@@ -143,7 +145,6 @@
       ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state))
       (else (error badop)))))
 
-;deal with FRACTIONS!!!
 (define M_value_int
   (lambda (lis state)
     (cond
