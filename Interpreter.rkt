@@ -91,11 +91,17 @@
       ((not (pair? (cdr expr))) state)
       (else (M_state_stmt expr state)))))
 
-;Needs to be implemented
-;(define M_state_stmt)
+(define M_state_stmt
+  (lambda (stmt state)
+    (cond
+      ((null? stmt) state)
+      ((not (pair? stmt)) state)
+      ((eq? getKey(stmt) 'return) state)
+      ((eq? getKey(stmt) '=) (M_state_assign stmt))
+      (else state))))
 
 ;Needs to be implemented
-;(define M_state_cond)
+(define M_state_cond)
 
 (define M_value
    (lambda (x state)
