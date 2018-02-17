@@ -47,11 +47,12 @@
 (define M_state
   (lambda (x cond then else loopbody state)
     (cond
+      ((null? x) state)
       ((eq? (getKey x) 'if) (M_state_if cond then else state))
       ((eq? (getKey x) 'while) (M_state_while cond loopbody state))
       ((eq? (getKey x) 'var) (addToState (getExpr x) 'NULL))
       ((eq? (getKey x) 'return) state)
-      ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr) state))
+      ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr x) state))
       ((member (getKey x) (expressions)) (M_state_expr x state ))
       (else state))))
     
