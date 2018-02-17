@@ -100,8 +100,11 @@
       ((eq? getKey(stmt) '=) (M_state_assign stmt))
       (else state))))
 
-;Needs to be implemented
-(define M_state_cond)
+(define M_state_cond
+  (lambda (con state)
+    (cond
+      ((null? con) state)
+      (else state))))
 
 (define M_value
    (lambda (x state)
@@ -109,7 +112,8 @@
       ((eq? getKey(x) 'var) (M_value_var x state))
       ((eq? getKey(x) 'return) (M_value_return x state))
       ((eq? getKey(x) '=) (M_value_assign x state)) 
-      ((member getKey(x) (expressions)) (M_value_expr x state )))))
+      ((member getKey(x) (expressions)) (M_value_expr x state ))
+      (else))))
 
 (define M_value_var
   (lambda (var state)
