@@ -8,7 +8,7 @@
 ;Needs to be implemented
 (define interpret
   (lambda (fileName)
-    ()))
+    (M_value (parser fileName) '(() ()))))
     
 (define getVarLis
   (lambda (state)
@@ -109,10 +109,10 @@
 (define M_value
    (lambda (x state)
     (cond
-      ((eq? getKey(x) 'var) (M_value_var x state))
-      ((eq? getKey(x) 'return) (M_value_return x state))
-      ((eq? getKey(x) '=) (M_value_assign x state)) 
-      ((member getKey(x) (expressions)) (M_value_expr x state )))))
+      ((eq? (getKey x) 'var) (M_value_var x state))
+      ((eq? (getKey x) 'return) (M_value_return x state))
+      ((eq? (getKey x) '=) (M_value_assign x state)) 
+      ((member (getKey x) (expressions)) (M_value_expr x state )))))
 
 (define M_value_var
   (lambda (var state)
