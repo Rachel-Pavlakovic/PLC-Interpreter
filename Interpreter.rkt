@@ -91,7 +91,6 @@
       ((not (pair? (cdr expr))) state)
       (else (M_state_stmt expr state)))))
 
-;Needs to be implemented
 (define M_state_stmt
   (lambda (stmt state)
     (cond
@@ -110,8 +109,7 @@
       ((eq? getKey(x) 'var) (M_value_var x state))
       ((eq? getKey(x) 'return) (M_value_return x state))
       ((eq? getKey(x) '=) (M_value_assign x state)) 
-      ((member getKey(x) (expressions)) (M_value_expr x state ))
-      (else))))
+      ((member getKey(x) (expressions)) (M_value_expr x state )))))
 
 (define M_value_var
   (lambda (var state)
@@ -139,7 +137,7 @@
       ((and (not (pair? (cdr expr))) (number? (operator expr))) (operator expr))
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) #t)
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) #f)
-      ((not (pair? (cdr expr))) (M_value_var expr state))
+      ((not (pair? (cdr expr))) (M_value_var (car expr) state))
       ((or (eq? (operator expr) '+)(eq? (operator expr) '-)(eq? (operator expr) '*)(eq? (operator expr) '/)(eq? (operator expr) '%)) (M_value_int expr state))
       ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state))
       ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state))
@@ -149,6 +147,7 @@
   (lambda (lis state)
     (cond
       ((number? lis) lis)
+      ((not (pair? lis)) (M_value_var lis state))
       ((eq? '+ (operator lis)) (+ (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
       ((and (eq? '- (operator lis)) (not (pair? (operand4 lis)))) (- (M_value_int (operand1 lis) state)))
       ((and (eq? '- (operator lis)) (pair? (operand4 lis))) (- (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
@@ -162,6 +161,7 @@
     (cond
       ((eq? lis 'true) #t)
       ((eq? lis 'false) #f)
+      ((not (pair? lis)) (M_value_var lis state))
       ((eq? '&& (operator lis)) (and (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
       ((eq? '|| (operator lis)) (or (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
       ((eq? '! (operator lis)) (not (M_value_bool (operand1 lis) state)))
@@ -171,6 +171,7 @@
   (lambda (lis state)
     (cond
       ((number? lis) lis)
+      ((not (pair? lis)) (M_value_var lis state))
       ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state) (M_value_comp (operand2 lis) state)))
       ((eq? '< (operator lis)) (< (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
       ((eq? '>= (operator lis)) (>= (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
