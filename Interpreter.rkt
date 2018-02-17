@@ -7,9 +7,14 @@
 
 (define interpret
   (lambda (fileName)
-    (M_value (getToInnerList (parser fileName)) '(() ()))))
+    (parseRecurse (car (parser fileName)) '(() ()))))
 
-(define getToInnerList car)
+(define parseRecurse
+  (lambda (statement state)
+    (cond
+      ;((null? statement))
+      ((null? (cdr statement)) (M_value (car statement) state))
+      (else (parseRecurse (cdr statement) (M_state (car statement) '() '() '() '() state))))))
     
 (define getVarLis
   (lambda (state)
@@ -132,9 +137,7 @@
   (lambda (expr state)
     (cond
       ((null? expr) expr)
-      (else (M_value_expr (getReturnvalue expr) state)))))
-
-(define getReturnValue cadr)
+      (else (M_value_expr (operand1 expr) state)))))
       
 (define M_value_expr
   (lambda (expr state)
