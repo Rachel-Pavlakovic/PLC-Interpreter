@@ -5,7 +5,6 @@
 
 (require "simpleParser.scm")
 
-;Needs to be implemented
 (define interpret
   (lambda (fileName)
     (M_value (parser fileName) '(() ()))))
@@ -41,12 +40,12 @@
 (define M_state
   (lambda (x cond then else loopbody state)
     (cond
-      ((eq? getKey(x) 'if) (M_state_if(cond then else state)))
-      ((eq? getKey(x) 'while) (M_state_while(cond loopbody state)))
-      ((eq? getKey(x) 'var) state)
-      ((eq? getKey(x) 'return) state)
-      ((eq? getKey(x) '=) (M_state_assign (getVar x) (getExpr) state))
-      ((member getKey(x) (expressions)) (M_state_expr x state ))
+      ((eq? (getKey x) 'if) (M_state_if(cond then else state)))
+      ((eq? (getKey x) 'while) (M_state_while(cond loopbody state)))
+      ((eq? (getKey x) 'var) state)
+      ((eq? (getKey x) 'return) state)
+      ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr) state))
+      ((member (getKey x) (expressions)) (M_state_expr x state ))
       (else state))))
     
 (define getKey
@@ -96,8 +95,8 @@
     (cond
       ((null? stmt) state)
       ((not (pair? stmt)) state)
-      ((eq? getKey(stmt) 'return) state)
-      ((eq? getKey(stmt) '=) (M_state_assign stmt))
+      ((eq? (getKey stmt) 'return) state)
+      ((eq? (getKey stmt) '=) (M_state_assign stmt))
       (else state))))
 
 (define M_state_cond
