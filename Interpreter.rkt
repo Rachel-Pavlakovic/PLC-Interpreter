@@ -47,9 +47,9 @@
 (define M_state
   (lambda (x cond then else loopbody state)
     (cond
-      ((eq? (getKey x) 'if) (M_state_if(cond then else state)))
-      ((eq? (getKey x) 'while) (M_state_while(cond loopbody state)))
-      ((eq? (getKey x) 'var) state)
+      ((eq? (getKey x) 'if) (M_state_if cond then else state))
+      ((eq? (getKey x) 'while) (M_state_while cond loopbody state))
+      ((eq? (getKey x) 'var) (addToState (getExpr x) 'NULL))
       ((eq? (getKey x) 'return) state)
       ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr) state))
       ((member (getKey x) (expressions)) (M_state_expr x state ))
@@ -70,7 +70,7 @@
 
 (define M_state_if
   (lambda (cond then else state)
-    (if (M_bool cond state)
+    (if (M_value_bool cond state)
         (M_state_stmt then state)
         (M_state_stmt else state))))
    
