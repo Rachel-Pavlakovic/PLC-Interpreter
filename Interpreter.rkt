@@ -7,7 +7,7 @@
 
 (define interpret
   (lambda (fileName)
-    (parseRecurse (car (parser fileName)) '(() ()))))
+    (parseRecurse (parser fileName) '(() ()))))
 
 (define parseRecurse
   (lambda (statement state)
@@ -143,6 +143,8 @@
   (lambda (expr state)
     (cond
       ((null? expr) expr)
+      ((number? expr) expr)
+      ; deal with variables here
       ((and (not (pair? (cdr expr))) (number? (operator expr))) (operator expr))
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) #t)
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) #f)
