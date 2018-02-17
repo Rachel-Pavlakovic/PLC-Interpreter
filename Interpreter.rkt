@@ -7,7 +7,7 @@
 
 (define interpret
   (lambda (fileName)
-    (M_value (parser fileName) '(() ()))))
+    (M_value (car (parser fileName)) '(() ()))))
     
 (define getVarLis
   (lambda (state)
