@@ -14,7 +14,7 @@
     (cond
       ;((null? statement))
       ((null? (cdr statement)) (M_value (car statement) state))
-      (else (parseRecurse (cdr statement) (M_state (car statement) '() '() '() '() state))))))
+      (else (parseRecurse (cdr statement) (M_state (car statement) state))))))
     
 (define getVarLis
   (lambda (state)
@@ -44,19 +44,18 @@
       (else (getValueFromState var (list (cdar state) (cdadr state)))))))
 
 (define M_state
-  (lambda (x condi then else loopbody state)
+  (lambda (x state)
     (cond
       ((null? x) state)
-      ((eq? (getKey x) 'if) (M_state_if condi then else state))
-      ((eq? (getKey x) 'while) (M_state_while condi loopbody state))
-      ; CHECK IF DECLARATION ALSO INCLUDES ASSIGNMENT
+      ((eq? (getKey x) 'if) (M_state_if x state))
+      ((eq? (getKey x) 'while) (M_state_while x state))
       ((and (eq? (getKey x) 'var) (not (pair? (operand4 x)))) (addToState (getVar x) 'NULL state))
       ((eq? (getKey x) 'var) (addToState (getVar x) (M_value_expr (operand2 x) state) state))
       ((eq? (getKey x) 'return) state)
       ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr x) state))
       ((member (getKey x) (expressions)) (M_state_expr x state ))
       (else state))))
-    
+
 (define getKey
   (lambda (line)
     (car line)))
@@ -71,16 +70,27 @@
     '(+ - * / % < > <= >= == != || && !)))
 
 (define M_state_if
-  (lambda (condi then else state)
-    (if (M_value_bool condi state)
-        (M_state_stmt then state)
-        (M_state_stmt else state))))
+  (lambda (x state)
+    (if (M_value_bool (getCondition x) state)
+        (M_state_stmt (getThen x) state)
+        (M_state_stmt (getElse x) state))))
    
 (define M_state_while
-  (lambda (condi loopbody state)
+  (lambda (x state)
     (if (M_bool condi state)
         (M_state_while condi loopbody (M_state_stmt loopbody (M_state_cond condi state)))
         (M_state_cond condi state))))
+
+(define getCondition cadr)
+(define getThen caddr)
+(define getElse
+  (lambda (line)
+    (cond
+      ((null? (cdddr line)) '())
+      (else (caddr line)))))
+
+;(define getLoopbody)
+
 
 ; THIS IS VERY INEFFICIENT
 (define M_state_assign
