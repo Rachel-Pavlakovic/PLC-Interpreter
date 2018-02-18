@@ -26,8 +26,7 @@
 
 (define addToState
   (lambda (var val state)
-    (cons var (getVarLis state))
-    (cons val (getValLis state))))
+    (list (cons var (getVarLis state)) (cons val (getValLis state)))))
 
 (define removeFromState
   (lambda (var state)
@@ -40,17 +39,18 @@
 (define getValueFromState
   (lambda (var state)
     (cond
-      ((null? (getVarLis state)) state)
+      ((null? (getVarLis state)) 'error)
       ((eq? (car (getVarLis state)) var) (car (getValLis state)))
       (else (getValueFromState var (list (cdar state) (cdadr state)))))))
 
 (define M_state
-  (lambda (x cond then else loopbody state)
+  (lambda (x condi then else loopbody state)
     (cond
       ((null? x) state)
-      ((eq? (getKey x) 'if) (M_state_if cond then else state))
-      ((eq? (getKey x) 'while) (M_state_while cond loopbody state))
-      ((eq? (getKey x) 'var) (addToState (getExpr x) 'NULL))
+      ((eq? (getKey x) 'if) (M_state_if condi then else state))
+      ((eq? (getKey x) 'while) (M_state_while condi loopbody state))
+      ; CHECK IF DECLARATION ALSO INCLUDES ASSIGNMENT
+      ((eq? (getKey x) 'var) (addToState (getVar x) 'NULL state))
       ((eq? (getKey x) 'return) state)
       ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr x) state))
       ((member (getKey x) (expressions)) (M_state_expr x state ))
@@ -84,7 +84,7 @@
 (define M_state_assign
   (lambda (var expr state)
     (addToState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))
-    (removeFromeState var (M_state_expr expr state))))
+    (removeFromState var (M_state_expr expr state))))
 
 ;(define M_state_var)
 
@@ -92,7 +92,8 @@
   (lambda (expr state)
     (cond
       ((null? expr) state)
-      ((and (not (pair? (cdr expr))) (number? (operator expr))) state)
+      ((number? expr) state)
+      ;((and (not (pair? (cdr expr))) (number? (operator expr))) state)
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) state)
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) state)
       ((not (pair? (cdr expr))) state)
@@ -145,7 +146,7 @@
     (cond
       ((null? expr) expr)
       ((number? expr) expr)
-      ; deal with variables here
+      ((not (list? expr)) (getValueFromState expr state))
       ((and (not (pair? (cdr expr))) (number? (operator expr))) (operator expr))
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) #t)
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) #f)
