@@ -39,9 +39,20 @@
 (define getValueFromState
   (lambda (var state)
     (cond
-      ((null? (getVarLis state)) 'error)
+      ((null? (getVarLis state)) (error "Undeclared variable"))
+      ((eq? (car (getVarLis state)) 'NULL) (error "Unassigned variable"))
       ((eq? (car (getVarLis state)) var) (car (getValLis state)))
       (else (getValueFromState var (list (cdar state) (cdadr state)))))))
+
+(define replaceInState
+  (lambda (var val state)
+    (cond
+      ((null? (getVarLis state)) (error "Undeclared variable"))
+      ((eq? (car (getVarLis state)) 'NULL) (error "Unassigned variable"))
+      ;((and (eq? (car (getVarLis state)) var) (eq? (car (getValLis state)) 'NULL)) (error "Unassigned variable"))
+      ((eq? (car (getVarLis state)) var) (list (cons var (cdr (getVarLis state))) (cons val (cdr (getValLis state)))))
+      (else (list (cons (car (getVarLis state)) (car (replaceInState var val (list (cdar state) (cdadr state)))))
+                  (cons (car (getValLis state)) (cadr (replaceInState var val (list (cdar state) (cdadr state))))))))))
 
 (define M_state
   (lambda (x state)
@@ -50,9 +61,9 @@
       ((eq? (getKey x) 'if) (M_state_if x state))
       ((eq? (getKey x) 'while) (M_state_while x state))
       ((and (eq? (getKey x) 'var) (not (pair? (operand4 x)))) (addToState (getVar x) 'NULL state))
-      ((eq? (getKey x) 'var) (M_state_assign (getVar x) (M_value_expr (operand2 x) state) state))
+      ((eq? (getKey x) 'var) (M_state_assign (getVar x) (M_value_expr (operand2 x) state) (addToState (getVar x) 'NULL state)))
       ((eq? (getKey x) 'return) state)
-      ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr x) state))
+      ((and (eq? (getKey x) '=) (not (eq? (getValueFromState (getVar x) state) 'error))) (M_state_assign (getVar x) (getExpr x) state))
       ((member (getKey x) (expressions)) (M_state_expr x state ))
       (else state))))
 
@@ -74,12 +85,12 @@
     (if (M_value_expr (getCondition x) state)
         (M_state_stmt (getThen x) state)
         (M_state_stmt (getElse x) state))))
-   
+
 (define M_state_while
   (lambda (x state)
-    (if (M_bool condi state)
-        (M_state_while condi loopbody (M_state_stmt loopbody (M_state_cond condi state)))
-        (M_state_cond condi state))))
+    (if (M_value_expr (getCondition x) state)
+        (M_state_while x (M_state_stmt (getLoopbody x) (M_state_cond (getCondition x) state)))
+        (M_state_cond (getCondition x) state))))
 
 (define getCondition cadr)
 (define getThen caddr)
@@ -88,14 +99,13 @@
     (cond
       ((null? (cdddr line)) '())
       (else (cadddr line)))))
-
-;(define getLoopbody)
+(define getLoopbody caddr)
 
 
 ; THIS IS VERY INEFFICIENT
 (define M_state_assign
   (lambda (var expr state)
-    (addToState var (M_value_expr expr (M_state_expr expr (removeFromState var state))) (M_state_expr expr (removeFromState var state)))))
+    (replaceInState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))))
 
 ;(define M_state_var)
 
@@ -151,6 +161,8 @@
   (lambda (expr state)
     (cond
       ((null? expr) expr)
+      ((eq? (M_value_expr (operand1 expr) state) #t) 'true)
+      ((eq? (M_value_expr (operand1 expr) state) #f) 'false)
       (else (M_value_expr (operand1 expr) state)))))
       
 (define M_value_expr
