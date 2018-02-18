@@ -50,8 +50,8 @@
       ((eq? (getKey x) 'if) (M_state_if condi then else state))
       ((eq? (getKey x) 'while) (M_state_while condi loopbody state))
       ; CHECK IF DECLARATION ALSO INCLUDES ASSIGNMENT
-      ((and (eq? (getKey x) 'var) (not (pair? x))) (addToState (getVar x) 'NULL state))
-      ((eq? (getKey x) 'var) (addToState (getVar x) (M_state_expr x state) state))
+      ((and (eq? (getKey x) 'var) (not (pair? (operand4 x)))) (addToState (getVar x) 'NULL state))
+      ((eq? (getKey x) 'var) (addToState (getVar x) (M_value_expr (operand2 x) state) state))
       ((eq? (getKey x) 'return) state)
       ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr x) state))
       ((member (getKey x) (expressions)) (M_state_expr x state ))
