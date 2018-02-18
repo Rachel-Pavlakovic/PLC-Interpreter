@@ -70,21 +70,22 @@
     '(+ - * / % < > <= >= == != || && !)))
 
 (define M_state_if
-  (lambda (cond then else state)
-    (if (M_value_bool cond state)
+  (lambda (condi then else state)
+    (if (M_value_bool condi state)
         (M_state_stmt then state)
         (M_state_stmt else state))))
    
 (define M_state_while
-  (lambda (cond loopbody state)
-    (if (M_bool cond state)
-        (M_state_while cond loopbody (M_state_stmt loopbody (M_state_cond cond state)))
-        (M_state_cond cond state))))
+  (lambda (condi loopbody state)
+    (if (M_bool condi state)
+        (M_state_while condi loopbody (M_state_stmt loopbody (M_state_cond condi state)))
+        (M_state_cond condi state))))
 
+; THIS IS VERY INEFFICIENT
 (define M_state_assign
   (lambda (var expr state)
-    (addToState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))
-    (removeFromState var (M_state_expr expr state))))
+    (removeFromState var state)
+    (addToState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))))
 
 ;(define M_state_var)
 
