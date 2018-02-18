@@ -50,7 +50,7 @@
       ((eq? (getKey x) 'if) (M_state_if x state))
       ((eq? (getKey x) 'while) (M_state_while x state))
       ((and (eq? (getKey x) 'var) (not (pair? (operand4 x)))) (addToState (getVar x) 'NULL state))
-      ((eq? (getKey x) 'var) (addToState (getVar x) (M_value_expr (operand2 x) state) state))
+      ((eq? (getKey x) 'var) (M_state_assign (getVar x) (M_value_expr (operand2 x) state) state))
       ((eq? (getKey x) 'return) state)
       ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr x) state))
       ((member (getKey x) (expressions)) (M_state_expr x state ))
@@ -71,7 +71,7 @@
 
 (define M_state_if
   (lambda (x state)
-    (if (M_value_bool (getCondition x) state)
+    (if (M_value_expr (getCondition x) state)
         (M_state_stmt (getThen x) state)
         (M_state_stmt (getElse x) state))))
    
@@ -87,7 +87,7 @@
   (lambda (line)
     (cond
       ((null? (cdddr line)) '())
-      (else (caddr line)))))
+      (else (cadddr line)))))
 
 ;(define getLoopbody)
 
@@ -95,8 +95,7 @@
 ; THIS IS VERY INEFFICIENT
 (define M_state_assign
   (lambda (var expr state)
-    (removeFromState var state)
-    (addToState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))))
+    (addToState var (M_value_expr expr (M_state_expr expr (removeFromState var state))) (M_state_expr expr (removeFromState var state)))))
 
 ;(define M_state_var)
 
@@ -105,6 +104,7 @@
     (cond
       ((null? expr) state)
       ((number? expr) state)
+      ((not (list? expr)) state)
       ;((and (not (pair? (cdr expr))) (number? (operator expr))) state)
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) state)
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) state)
@@ -117,7 +117,7 @@
       ((null? stmt) state)
       ((not (pair? stmt)) state)
       ((eq? (getKey stmt) 'return) state)
-      ((eq? (getKey stmt) '=) (M_state_assign stmt))
+      ((eq? (getKey stmt) '=) (M_state_assign (operand1 stmt) (operand2 stmt) state))
       (else state))))
 
 (define M_state_cond
