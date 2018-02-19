@@ -119,8 +119,10 @@
 
 (define M_state_assign
   (lambda (var expr state)
-    (if (isDeclared var (getVarLis state))
-        (addToState var (M_value_expr expr (M_state_expr expr (removeFromState var state))) (M_state_expr expr (removeFromState var state))))))
+    (cond
+      ((and (isDeclared var (getVarLis state)) (eq? var expr)) state)
+      ((isAssigned var state) (replaceInState var (M_value_expr expr state) state))
+      ((isDeclared var (getVarLis state)) (addToState var (M_value_expr expr (M_state_expr expr (removeFromState var state))) (M_state_expr expr (removeFromState var state)))))))
 
 (define isDeclared
   (lambda (var varLis)
@@ -230,6 +232,8 @@
     (cond
       ((eq? lis 'true) #t)
       ((eq? lis 'false) #f)
+      ((eq? lis #t) #t)
+      ((eq? lis #f) #f)
       ((and (not (pair? lis)) (isAssigned lis state)) (M_value_var lis state))
       ((eq? '&& (operator lis)) (and (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
       ((eq? '|| (operator lis)) (or (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
