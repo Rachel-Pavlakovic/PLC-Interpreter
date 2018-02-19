@@ -15,36 +15,36 @@
   (lambda (statement state)
     (cond
       ((isReturnPresent state) (getReturnIfPresent state))
-      (else (parseRecurse (cdr statement) (M_state (car statement) state))))))
+      (else (parseRecurse (rest statement) (M_state (first statement) state))))))
 
 ;--------------M_state-----------------
 ;M_state is the main dispatch center which calls different state functions depending on the command in the code statement
 (define M_state
-  (lambda (x state)
+  (lambda (exp state)
     (cond
-      ((null? x) state)
-      ((eq? (getKey x) 'if) (M_state_if x state))
-      ((eq? (getKey x) 'while) (M_state_while x state))
-      ((and (eq? (getKey x) 'var) (not (pair? (operand4 x)))) (addToState (getVar x) 'NULL state))
-      ((eq? (getKey x) 'var) (M_state_dec&assign (getVar x) (M_value_expr (operand2 x) state) (addToState (getVar x) 'NULL state)))
-      ((eq? (getKey x) 'return) (addToState 'return (M_value x state) state))
-      ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr x) state))
-      ((member (getKey x) (expressions)) (M_state_expr x state ))
+      ((null? exp) state)
+      ((eq? (getKey exp) 'if) (M_state_if exp state))
+      ((eq? (getKey exp) 'while) (M_state_while exp state))
+      ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
+      ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state) (addToState (getVar exp) 'NULL state))) ;declaration with assignment
+      ((eq? (getKey exp) 'return) (addToState 'return (M_value exp state) state)) ;assignment without built in declaration
+      ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state))
+      ((member (getKey exp) (expressions)) (M_state_expr exp state ))
       (else state))))
 
 ;M_state_if when the code has an 'if command this fucntion breaks it down into condition, then, and else and chooses them based on the condition
 (define M_state_if
-  (lambda (x state)
-    (if (M_value_expr (getCondition x) state)
-        (M_state_stmt (getThen x) state)
-        (M_state_stmt (getElse x) state))))
+  (lambda (exp state)
+    (if (M_value_expr (getCondition exp) state)
+        (M_state_stmt (getThen exp) state)
+        (M_state_stmt (getElse exp) state))))
 
 ;M_state_while when the code has a 'while this function finds its condition and loopbody then recursively calls the loopbody until the condition is no longer true
 (define M_state_while
-  (lambda (x state)
-    (if (M_value_expr (getCondition x) state)
-        (M_state_while x (M_state_stmt (getLoopbody x) (M_state_cond (getCondition x) state)))
-        (M_state_cond (getCondition x) state))))
+  (lambda (exp state)
+    (if (M_value_expr (getCondition exp) state)
+        (M_state_while exp (M_state_stmt (getLoopbody exp) (M_state_cond (getCondition exp) state)))
+        (M_state_cond (getCondition exp) state))))
 
 ;M_state_dec&assign when a variable is declared and assigned in the same line of code, this adds both the variable and value to the state
 (define M_state_dec&assign
@@ -66,9 +66,9 @@
       ((null? expr) state)
       ((number? expr) state)
       ((not (list? expr)) state)
-      ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) state)
-      ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) state)
-      ((not (pair? (cdr expr))) state)
+      ((and (not (pair? (rest expr))) (eq? (operator expr) 'true)) state)
+      ((and (not (pair? (rest expr))) (eq? (operator expr) 'false)) state)
+      ((not (pair? (rest expr))) state)
       (else (M_state_stmt expr state)))))
 
 ;takes a statement and determines if 'return or '= are called if not returns state
@@ -91,12 +91,12 @@
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
 (define M_value
-   (lambda (x state)
+   (lambda (exp state)
     (cond
-      ((eq? (getKey x) 'var) (M_value_var x state))
-      ((eq? (getKey x) 'return) (M_value_return x state))
-      ((eq? (getKey x) '=) (M_value_assign x state)) 
-      ((member (getKey x) (expressions)) (M_value_expr x state )))))
+      ((eq? (getKey exp) 'var) (M_value_var exp state))
+      ((eq? (getKey exp) 'return) (M_value_return exp state))
+      ((eq? (getKey exp) '=) (M_value_assign exp state)) 
+      ((member (getKey exp) (expressions)) (M_value_expr exp state )))))
 
 ;returns the value of var
 (define M_value_var
@@ -131,10 +131,10 @@
       ((eq? expr #t) #t)
       ((eq? expr #f) #f)
       ((not (list? expr)) (getValueFromState expr state))
-      ((and (not (pair? (cdr expr))) (number? (operator expr))) (operator expr))
-      ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) #t)
-      ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) #f)
-      ((not (pair? (cdr expr))) (M_value_var (car expr) state))
+      ((and (not (pair? (rest expr))) (number? (first expr))) (first expr))
+      ((and (not (pair? (rest expr))) (eq? (first expr) 'true)) #t)
+      ((and (not (pair? (rest expr))) (eq? (first expr) 'false)) #f)
+      ((not (pair? (rest expr))) (M_value_var (first expr) state))
       ((or (eq? (operator expr) '+)(eq? (operator expr) '-)(eq? (operator expr) '*)(eq? (operator expr) '/)(eq? (operator expr) '%)) (M_value_int expr state))
       ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state))
       ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state))
@@ -147,15 +147,15 @@
       ((number? lis) lis)
       ((and (not (pair? lis)) (isAssigned lis state)) (M_value_var lis state))
       ((eq? '+ (operator lis)) (+ (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
-      ((and (eq? '- (operator lis)) (not (pair? (operand4 lis)))) (- (M_value_int (operand1 lis) state)))
-      ((and (eq? '- (operator lis)) (pair? (operand4 lis))) (- (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
+      ((and (eq? '- (operator lis)) (not (pair? (restOfRest lis)))) (- (M_value_int (operand1 lis) state)))
+      ((and (eq? '- (operator lis)) (pair? (restOfRest lis))) (- (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
       ((eq? '* (operator lis)) (* (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
       ((eq? '/ (operator lis)) (quotient (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
       ((eq? '% (operator lis)) (remainder (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
       (else (M_value_expr lis state)))))
 
 ;takes an expr that starts with a logic symbol and recursively evaluates all of the operations in the expression. if an operator
-; is not in the list the code calls M_value_expr in order to determine value of different internal operations, returns final boolean
+;is not in the list the code calls M_value_expr in order to determine value of different internal operations, returns final boolean
 (define M_value_bool
   (lambda (lis state)
     (cond
@@ -170,7 +170,7 @@
       (else (M_value_expr lis state)))))
 
 ;takes an expr that starts with a comapison symbol and recursively evaluates all of the operations in the expression. if an operator
-; is not in the list the code calls M_value_expr in order to determine the value of different internal operations, returns final boolean
+;is not in the list the code calls M_value_expr in order to determine the value of different internal operations, returns final boolean
 (define M_value_comp
   (lambda (lis state)
     (cond
@@ -192,7 +192,7 @@
 
 ;-------------- Helper Methods-----------------
 ;When a return is found, a variable 'return is added to the state with the value of the return's expression
-;this method is used to check in parseRecurse if a return has been called and stop program execution
+;this function is used to check in parseRecurse if a return has been called and stop program execution
 (define isReturnPresent
   (lambda (state)
     (isReturnPresentHelper (getVarLis state))))
@@ -202,108 +202,134 @@
   (lambda (varLis)
     (cond
       ((null? varLis) #f)
-      ((eq? 'return (car varLis)) #t)
-      (else (isReturnPresentHelper (cdr varLis))))))
+      ((eq? 'return (first varLis)) #t)
+      (else (isReturnPresentHelper (rest varLis))))))
 
-;this variable is called in the event isReturnPresent is true, in parseRecurse
+;this function is called in the event isReturnPresent is true, in parseRecurse
 ;returns the value of the return
 (define getReturnIfPresent
   (lambda (state)
     (getValueFromState 'return state)))
 
 ;--Error Checking Helpers--
+
+;checks to see if a variable has been declared or not
 (define isDeclared
   (lambda (var varLis)
     (cond
       ((null? varLis) (error "Undeclared variable"))
-      ((eq? (car varLis) var) #t)
-      (else (isDeclared var (cdr varLis))))))
+      ((eq? (first varLis) var) #t)
+      (else (isDeclared var (rest varLis))))))
 
+;checks to see if a varaible has been assigned or not
 (define isAssigned
   (lambda (var state)
     (isAssignedHelper var (getVarLis state))))
 
+;parses through state to find input variable if it is present
 (define isAssignedHelper
   (lambda (var varLis)
     (cond
       ((null? varLis) (error "Unassigned variable"))
-      ((eq? var (car varLis)) #t)
-      (else (isAssignedHelper var (cdr varLis))))))
+      ((eq? var (first varLis)) #t)
+      (else (isAssignedHelper var (rest varLis))))))
 
 ;--State Helpers--
+
+;state is stored as a list with two sublists. The first sublist is the variable names, the second is the corresponding variable values (NULL if the variable is unassigned)
+
+;gets the list of variable names from the state
 (define getVarLis
   (lambda (state)
-    (car state)))
+    (first state)))
 
+;gets the list of variable values from the state
 (define getValLis
   (lambda (state)
-    (cadr state)))
+    (firstOfRest state)))
 
+;adds a varaible and its corresponding value to the state
 (define addToState
   (lambda (var val state)
     (list (cons var (getVarLis state)) (cons val (getValLis state)))))
 
+;removes a variable and its corresponding value to the state
 (define removeFromState
   (lambda (var state)
     (cond
       ((null? (getVarLis state)) state)
-      ((eq? (car (getVarLis state)) var) (list (cdr (getVarLis state)) (cdr (getValLis state))))
-      (else (list (cons (car (getVarLis state)) (car (removeFromState var (list (cdar state) (cdadr state)))))
-                  (cons (car (getValLis state)) (cadr (removeFromState var (list (cdar state) (cdadr state))))))))))
+      ((eq? (first (getVarLis state)) var) (list (rest (getVarLis state)) (rest (getValLis state))))
+      (else (list (cons (first (getVarLis state)) (first (removeFromState var (list (restOfFirst state) (cdadr state)))))
+                  (cons (first (getValLis state)) (firstOfRest (removeFromState var (list (restOfFirst state) (cdadr state))))))))))
 
+;given a variable name, this function returns that variables value 
 (define getValueFromState
   (lambda (var state)
     (cond
       ((null? (getVarLis state)) (error "Undeclared variable"))
-      ((and (eq? (car (getVarLis state)) var)(eq? (car (getValLis state)) 'NULL)) (error "Unassigned variable"))
-      ((eq? (car (getVarLis state)) var) (car (getValLis state)))
-      (else (getValueFromState var (list (cdar state) (cdadr state)))))))
+      ((and (eq? (first (getVarLis state)) var)(eq? (first (getValLis state)) 'NULL)) (error "Unassigned variable"))
+      ((eq? (first (getVarLis state)) var) (first (getValLis state)))
+      (else (getValueFromState var (list (restOfFirst state) (cdadr state)))))))
 
+;replaces an already existing variable value pair with an updated value - used for already declared variables that are being assigned or reassigned
 (define replaceInState
   (lambda (var val state)
     (cond
       ((null? (getVarLis state)) (error "Undeclared variable" ))
-      ((eq? (car (getVarLis state)) var) (list (cons var (cdr (getVarLis state))) (cons val (cdr (getValLis state)))))
-      (else (list (cons (car (getVarLis state)) (car (replaceInState var val (list (cdar state) (cdadr state)))))
-                  (cons (car (getValLis state)) (cadr (replaceInState var val (list (cdar state) (cdadr state))))))))))
+      ((eq? (first (getVarLis state)) var) (list (cons var (rest (getVarLis state))) (cons val (rest (getValLis state)))))
+      (else (list (cons (first (getVarLis state)) (first (replaceInState var val (list (restOfFirst state) (cdadr state)))))
+                  (cons (first (getValLis state)) (firstOfRest (replaceInState var val (list (restOfFirst state) (cdadr state))))))))))
 
 ;-------------- Abstractions-----------------
-(define operator
-  (lambda (e)
-    (car e)))
 
+;get operator for math expressions and comparisons
+(define operator car)
+
+;get the first operand in a math expression or a comparison
 (define operand1 cadr)
 
+;get the second operand in a math expression or a comparison
 (define operand2 caddr)
 
-(define operand3 cadddr)
+;first and rest already predefined fucntions for car and cdr
+;functions as cadr
+(define firstOfRest cadr)
 
-(define operand4 cddr)
+;functions as caar
+(define firstOfFirst caar)
 
+;functions as cddr
+(define restOfRest cddr)
+
+;functions as cdar
+(define restOfFirst cdar)
+
+;gets the condition from an if statement or while loop
 (define getCondition cadr)
 
+;gets the then clause from an if statement - what happens if the condition is true
 (define getThen caddr)
 
+;gets the else clause from an if statement - what happens if the condition is false
 (define getElse
   (lambda (line)
     (cond
       ((null? (cdddr line)) '())
       (else (cadddr line)))))
 
+;gets the body of a while loop statement - what happens while the loop condition is true
 (define getLoopbody caddr)
 
-(define getKey
-  (lambda (line)
-    (car line)))
+;gets the key word for an expression - ex: if, while, return
+(define getKey car)
 
-(define getVar
-  (lambda (line)
-    (cadr line)))
+;gets the variable out of an assignment style statement
+(define getVar cadr)
 
-(define getExpr
-  (lambda (line)
-    (caddr line)))
+;gets the expression out of an assignemnt style statement - what the variable is being assigned to 
+(define getExpr caddr)
 
+;valid math and comparison expressions
 (define expressions
   (lambda ()
     '(+ - * / % < > <= >= == != || && !)))
