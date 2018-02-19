@@ -12,8 +12,23 @@
 (define parseRecurse
   (lambda (statement state)
     (cond
-      ((null? (cdr statement)) (M_value (car statement) state))
+      ((isReturnPresent state) (getReturnIfPresent state))
       (else (parseRecurse (cdr statement) (M_state (car statement) state))))))
+
+(define isReturnPresent
+  (lambda (state)
+    (isReturnPresentHelper (getVarLis state))))
+
+(define isReturnPresentHelper
+  (lambda (varLis)
+    (cond
+      ((null? varLis) #f)
+      ((eq? 'return (car varLis)) #t)
+      (else (isReturnPresentHelper (cdr varLis))))))
+      
+(define getReturnIfPresent
+  (lambda (state)
+    (getValueFromState 'return state)))
     
 (define getVarLis
   (lambda (state)
@@ -46,7 +61,7 @@
 (define replaceInState
   (lambda (var val state)
     (cond
-      ((null? (getVarLis state)) (error "Undeclared variable"))
+      ((null? (getVarLis state)) (error "Undeclared variable" ))
       ((eq? (car (getVarLis state)) var) (list (cons var (cdr (getVarLis state))) (cons val (cdr (getValLis state)))))
       (else (list (cons (car (getVarLis state)) (car (replaceInState var val (list (cdar state) (cdadr state)))))
                   (cons (car (getValLis state)) (cadr (replaceInState var val (list (cdar state) (cdadr state))))))))))
@@ -59,7 +74,7 @@
       ((eq? (getKey x) 'while) (M_state_while x state))
       ((and (eq? (getKey x) 'var) (not (pair? (operand4 x)))) (addToState (getVar x) 'NULL state))
       ((eq? (getKey x) 'var) (M_state_dec&assign (getVar x) (M_value_expr (operand2 x) state) (addToState (getVar x) 'NULL state)))
-      ((eq? (getKey x) 'return) state)
+      ((eq? (getKey x) 'return) (addToState 'return (M_value x state) state))
       ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr x) state))
       ((member (getKey x) (expressions)) (M_state_expr x state ))
       (else state))))
@@ -141,7 +156,7 @@
     (cond
       ((null? stmt) state)
       ((not (pair? stmt)) state)
-      ((eq? (getKey stmt) 'return) state)
+      ((eq? (getKey stmt) 'return) (addToState 'return (M_value stmt state) state))
       ((eq? (getKey stmt) '=) (M_state_assign (operand1 stmt) (operand2 stmt) state))
       (else state))))
 
