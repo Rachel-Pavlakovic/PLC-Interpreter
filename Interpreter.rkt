@@ -5,10 +5,12 @@
 
 (require "simpleParser.scm")
 
+;Interpret takes a filename and runs the code in the file
 (define interpret
   (lambda (fileName)
     (parseRecurse (parser fileName) '(() ()))))
 
+;Parserecurse recurses through parsed code and returns 
 (define parseRecurse
   (lambda (statement state)
     (cond
@@ -16,6 +18,7 @@
       (else (parseRecurse (rest statement) (M_state (first statement) state))))))
 
 ;--------------M_state-----------------
+;M_state is the main dispatch center which calls different state functions depending on the command in the code statement
 (define M_state
   (lambda (exp state)
     (cond
@@ -29,22 +32,26 @@
       ((member (getKey exp) (expressions)) (M_state_expr exp state ))
       (else state))))
 
+;M_state_if when the code has an 'if command this fucntion breaks it down into condition, then, and else and chooses them based on the condition
 (define M_state_if
   (lambda (exp state)
     (if (M_value_expr (getCondition exp) state)
         (M_state_stmt (getThen exp) state)
         (M_state_stmt (getElse exp) state))))
 
+;M_state_while when the code has a 'while this function finds its condition and loopbody then recursively calls the loopbody until the condition is no longer true
 (define M_state_while
   (lambda (exp state)
     (if (M_value_expr (getCondition exp) state)
         (M_state_while exp (M_state_stmt (getLoopbody exp) (M_state_cond (getCondition exp) state)))
         (M_state_cond (getCondition exp) state))))
 
+;M_state_dec&assign when a variable is declared and assigned in the same line of code, this adds both the variable and value to the state
 (define M_state_dec&assign
   (lambda (var expr state)
     (replaceInState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))))
 
+;M_state_assign when a variable is already declared, and its value is being redefined
 (define M_state_assign
   (lambda (var expr state)
     (cond
@@ -52,6 +59,7 @@
       ((isAssigned var state) (replaceInState var (M_value_expr expr state) state))
       ((isDeclared var (getVarLis state)) (addToState var (M_value_expr expr (M_state_expr expr (removeFromState var state))) (M_state_expr expr (removeFromState var state)))))))
 
+;M_state_expr when M_state doesn't find the key to be if, while, return, etc. this checks the expr to see if it is a statement or value
 (define M_state_expr
   (lambda (expr state)
     (cond
@@ -63,6 +71,7 @@
       ((not (pair? (rest expr))) state)
       (else (M_state_stmt expr state)))))
 
+;takes a statement and determines if 'return or '= are called if not returns state
 (define M_state_stmt
   (lambda (stmt state)
     (cond
@@ -72,6 +81,7 @@
       ((eq? (getKey stmt) '=) (M_state_assign (operand1 stmt) (operand2 stmt) state))
       (else state))))
 
+;returns state after a condition
 (define M_state_cond
   (lambda (con state)
     (cond
@@ -79,6 +89,7 @@
       (else state))))
 
 ;---------- M_value-----------
+;M_value is the main dispatch center for determining the value of code segments
 (define M_value
    (lambda (exp state)
     (cond
@@ -87,10 +98,12 @@
       ((eq? (getKey exp) '=) (M_value_assign exp state)) 
       ((member (getKey exp) (expressions)) (M_value_expr exp state )))))
 
+;returns the value of var
 (define M_value_var
   (lambda (var state)
     (getValueFromState var state)))
 
+;returns value of expr
 (define M_value_assign
   (lambda (expr state)
     (cond
@@ -100,6 +113,7 @@
       ((pair? (getExpr expr)) (M_value_expr (getExpr expr) state))
       (else (getValueFromState (getExpr expr) state)))))
 
+;takes value of expr and converts #t and #f to true and false
 (define M_value_return
   (lambda (expr state)
     (cond
@@ -107,7 +121,8 @@
       ((eq? (M_value_expr (operand1 expr) state) #t) 'true)
       ((eq? (M_value_expr (operand1 expr) state) #f) 'false)
       (else (M_value_expr (operand1 expr) state)))))
-      
+
+;determines if expr is a single value, variable or an operation. if so what kind of operation. this returns the value of the expr
 (define M_value_expr
   (lambda (expr state)
     (cond
@@ -125,6 +140,7 @@
       ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state))
       (else (error badop)))))
 
+;takes an expr that starts with a math symbol and recursively evaluates all of the operations in the expression, returns final value of math expression
 (define M_value_int
   (lambda (lis state)
     (cond
@@ -138,6 +154,8 @@
       ((eq? '% (operator lis)) (remainder (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
       (else (M_value_expr lis state)))))
 
+;takes an expr that starts with a logic symbol and recursively evaluates all of the operations in the expression. if an operator
+;is not in the list the code calls M_value_expr in order to determine value of different internal operations, returns final boolean
 (define M_value_bool
   (lambda (lis state)
     (cond
@@ -151,6 +169,8 @@
       ((eq? '! (operator lis)) (not (M_value_bool (operand1 lis) state)))
       (else (M_value_expr lis state)))))
 
+;takes an expr that starts with a comapison symbol and recursively evaluates all of the operations in the expression. if an operator
+;is not in the list the code calls M_value_expr in order to determine the value of different internal operations, returns final boolean
 (define M_value_comp
   (lambda (lis state)
     (cond
@@ -165,22 +185,28 @@
       (else (M_value_expr lis state)))))
 
 ;--------------M_bool-----------------
+;M_bool checks if bool is true or false, returns boolean
 (define M_bool
   (lambda (bool)
     (or (eq? bool #t) (eq? bool #f))))
 
 ;-------------- Helper Methods-----------------
+;When a return is found, a variable 'return is added to the state with the value of the return's expression
+;this function is used to check in parseRecurse if a return has been called and stop program execution
 (define isReturnPresent
   (lambda (state)
     (isReturnPresentHelper (getVarLis state))))
 
+;parses through state to find variable 'return, returns true if present false otherwise
 (define isReturnPresentHelper
   (lambda (varLis)
     (cond
       ((null? varLis) #f)
       ((eq? 'return (first varLis)) #t)
       (else (isReturnPresentHelper (rest varLis))))))
-      
+
+;this function is called in the event isReturnPresent is true, in parseRecurse
+;returns the value of the return
 (define getReturnIfPresent
   (lambda (state)
     (getValueFromState 'return state)))
@@ -236,7 +262,7 @@
       (else (list (cons (first (getVarLis state)) (first (removeFromState var (list (restOfFirst state) (cdadr state)))))
                   (cons (first (getValLis state)) (firstOfRest (removeFromState var (list (restOfFirst state) (cdadr state))))))))))
 
-;given a variable name, this method returns that variables value 
+;given a variable name, this function returns that variables value 
 (define getValueFromState
   (lambda (var state)
     (cond
