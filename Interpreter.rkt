@@ -12,7 +12,6 @@
 (define parseRecurse
   (lambda (statement state)
     (cond
-      ;((null? statement))
       ((null? (cdr statement)) (M_value (car statement) state))
       (else (parseRecurse (cdr statement) (M_state (car statement) state))))))
     
@@ -40,7 +39,7 @@
   (lambda (var state)
     (cond
       ((null? (getVarLis state)) (error "Undeclared variable"))
-      ((eq? (car (getVarLis state)) 'NULL) (error "Unassigned variable"))
+      ((and (eq? (car (getVarLis state)) var)(eq? (car (getValLis state)) 'NULL)) (error "Unassigned variable"))
       ((eq? (car (getVarLis state)) var) (car (getValLis state)))
       (else (getValueFromState var (list (cdar state) (cdadr state)))))))
 
@@ -48,8 +47,6 @@
   (lambda (var val state)
     (cond
       ((null? (getVarLis state)) (error "Undeclared variable"))
-      ((eq? (car (getVarLis state)) 'NULL) (error "Unassigned variable"))
-      ;((and (eq? (car (getVarLis state)) var) (eq? (car (getValLis state)) 'NULL)) (error "Unassigned variable"))
       ((eq? (car (getVarLis state)) var) (list (cons var (cdr (getVarLis state))) (cons val (cdr (getValLis state)))))
       (else (list (cons (car (getVarLis state)) (car (replaceInState var val (list (cdar state) (cdadr state)))))
                   (cons (car (getValLis state)) (cadr (replaceInState var val (list (cdar state) (cdadr state))))))))))
@@ -61,9 +58,9 @@
       ((eq? (getKey x) 'if) (M_state_if x state))
       ((eq? (getKey x) 'while) (M_state_while x state))
       ((and (eq? (getKey x) 'var) (not (pair? (operand4 x)))) (addToState (getVar x) 'NULL state))
-      ((eq? (getKey x) 'var) (M_state_assign (getVar x) (M_value_expr (operand2 x) state) (addToState (getVar x) 'NULL state)))
+      ((eq? (getKey x) 'var) (M_state_dec&assign (getVar x) (M_value_expr (operand2 x) state) (addToState (getVar x) 'NULL state)))
       ((eq? (getKey x) 'return) state)
-      ((and (eq? (getKey x) '=) (not (eq? (getValueFromState (getVar x) state) 'error))) (M_state_assign (getVar x) (getExpr x) state))
+      ((eq? (getKey x) '=) (M_state_assign (getVar x) (getExpr x) state))
       ((member (getKey x) (expressions)) (M_state_expr x state ))
       (else state))))
 
@@ -101,13 +98,32 @@
       (else (cadddr line)))))
 (define getLoopbody caddr)
 
-
-; THIS IS VERY INEFFICIENT
-(define M_state_assign
+(define M_state_dec&assign
   (lambda (var expr state)
     (replaceInState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))))
 
-;(define M_state_var)
+(define M_state_assign
+  (lambda (var expr state)
+    (if (isDeclared var (getVarLis state))
+        (addToState var (M_value_expr expr (M_state_expr expr (removeFromState var state))) (M_state_expr expr (removeFromState var state))))))
+
+(define isDeclared
+  (lambda (var varLis)
+    (cond
+      ((null? varLis) (error "Undeclared variable"))
+      ((eq? (car varLis) var) #t)
+      (else (isDeclared var (cdr varLis))))))
+
+(define isAssigned
+  (lambda (var state)
+    (isAssignedHelper var (getVarLis state))))
+
+(define isAssignedHelper
+  (lambda (var varLis)
+    (cond
+      ((null? varLis) (error "Unassigned variable"))
+      ((eq? var (car varLis)) #t)
+      (else (isAssignedHelper var (cdr varLis))))))
 
 (define M_state_expr
   (lambda (expr state)
@@ -115,7 +131,6 @@
       ((null? expr) state)
       ((number? expr) state)
       ((not (list? expr)) state)
-      ;((and (not (pair? (cdr expr))) (number? (operator expr))) state)
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) state)
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'false)) state)
       ((not (pair? (cdr expr))) state)
@@ -184,7 +199,7 @@
   (lambda (lis state)
     (cond
       ((number? lis) lis)
-      ((not (pair? lis)) (M_value_var lis state))
+      ((and (not (pair? lis)) (isAssigned lis state)) (M_value_var lis state))
       ((eq? '+ (operator lis)) (+ (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
       ((and (eq? '- (operator lis)) (not (pair? (operand4 lis)))) (- (M_value_int (operand1 lis) state)))
       ((and (eq? '- (operator lis)) (pair? (operand4 lis))) (- (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
@@ -198,7 +213,7 @@
     (cond
       ((eq? lis 'true) #t)
       ((eq? lis 'false) #f)
-      ((not (pair? lis)) (M_value_var lis state))
+      ((and (not (pair? lis)) (isAssigned lis state)) (M_value_var lis state))
       ((eq? '&& (operator lis)) (and (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
       ((eq? '|| (operator lis)) (or (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
       ((eq? '! (operator lis)) (not (M_value_bool (operand1 lis) state)))
@@ -208,7 +223,7 @@
   (lambda (lis state)
     (cond
       ((number? lis) lis)
-      ((not (pair? lis)) (M_value_var lis state))
+      ((and (not (pair? lis)) (isAssigned lis state)) (M_value_var lis state))
       ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state) (M_value_comp (operand2 lis) state)))
       ((eq? '< (operator lis)) (< (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
       ((eq? '>= (operator lis)) (>= (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
