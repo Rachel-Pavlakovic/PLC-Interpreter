@@ -15,57 +15,7 @@
       ((isReturnPresent state) (getReturnIfPresent state))
       (else (parseRecurse (cdr statement) (M_state (car statement) state))))))
 
-(define isReturnPresent
-  (lambda (state)
-    (isReturnPresentHelper (getVarLis state))))
-
-(define isReturnPresentHelper
-  (lambda (varLis)
-    (cond
-      ((null? varLis) #f)
-      ((eq? 'return (car varLis)) #t)
-      (else (isReturnPresentHelper (cdr varLis))))))
-      
-(define getReturnIfPresent
-  (lambda (state)
-    (getValueFromState 'return state)))
-    
-(define getVarLis
-  (lambda (state)
-    (car state)))
-
-(define getValLis
-  (lambda (state)
-    (cadr state)))
-
-(define addToState
-  (lambda (var val state)
-    (list (cons var (getVarLis state)) (cons val (getValLis state)))))
-
-(define removeFromState
-  (lambda (var state)
-    (cond
-      ((null? (getVarLis state)) state)
-      ((eq? (car (getVarLis state)) var) (list (cdr (getVarLis state)) (cdr (getValLis state))))
-      (else (list (cons (car (getVarLis state)) (car (removeFromState var (list (cdar state) (cdadr state)))))
-                  (cons (car (getValLis state)) (cadr (removeFromState var (list (cdar state) (cdadr state))))))))))
-
-(define getValueFromState
-  (lambda (var state)
-    (cond
-      ((null? (getVarLis state)) (error "Undeclared variable"))
-      ((and (eq? (car (getVarLis state)) var)(eq? (car (getValLis state)) 'NULL)) (error "Unassigned variable"))
-      ((eq? (car (getVarLis state)) var) (car (getValLis state)))
-      (else (getValueFromState var (list (cdar state) (cdadr state)))))))
-
-(define replaceInState
-  (lambda (var val state)
-    (cond
-      ((null? (getVarLis state)) (error "Undeclared variable" ))
-      ((eq? (car (getVarLis state)) var) (list (cons var (cdr (getVarLis state))) (cons val (cdr (getValLis state)))))
-      (else (list (cons (car (getVarLis state)) (car (replaceInState var val (list (cdar state) (cdadr state)))))
-                  (cons (car (getValLis state)) (cadr (replaceInState var val (list (cdar state) (cdadr state))))))))))
-
+;--------------M_state-----------------
 (define M_state
   (lambda (x state)
     (cond
@@ -79,19 +29,6 @@
       ((member (getKey x) (expressions)) (M_state_expr x state ))
       (else state))))
 
-(define getKey
-  (lambda (line)
-    (car line)))
-(define getVar
-  (lambda (line)
-    (cadr line)))
-(define getExpr
-  (lambda (line)
-    (caddr line)))
-(define expressions
-  (lambda ()
-    '(+ - * / % < > <= >= == != || && !)))
-
 (define M_state_if
   (lambda (x state)
     (if (M_value_expr (getCondition x) state)
@@ -104,15 +41,6 @@
         (M_state_while x (M_state_stmt (getLoopbody x) (M_state_cond (getCondition x) state)))
         (M_state_cond (getCondition x) state))))
 
-(define getCondition cadr)
-(define getThen caddr)
-(define getElse
-  (lambda (line)
-    (cond
-      ((null? (cdddr line)) '())
-      (else (cadddr line)))))
-(define getLoopbody caddr)
-
 (define M_state_dec&assign
   (lambda (var expr state)
     (replaceInState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))))
@@ -123,24 +51,6 @@
       ((and (isDeclared var (getVarLis state)) (eq? var expr)) state)
       ((isAssigned var state) (replaceInState var (M_value_expr expr state) state))
       ((isDeclared var (getVarLis state)) (addToState var (M_value_expr expr (M_state_expr expr (removeFromState var state))) (M_state_expr expr (removeFromState var state)))))))
-
-(define isDeclared
-  (lambda (var varLis)
-    (cond
-      ((null? varLis) (error "Undeclared variable"))
-      ((eq? (car varLis) var) #t)
-      (else (isDeclared var (cdr varLis))))))
-
-(define isAssigned
-  (lambda (var state)
-    (isAssignedHelper var (getVarLis state))))
-
-(define isAssignedHelper
-  (lambda (var varLis)
-    (cond
-      ((null? varLis) (error "Unassigned variable"))
-      ((eq? var (car varLis)) #t)
-      (else (isAssignedHelper var (cdr varLis))))))
 
 (define M_state_expr
   (lambda (expr state)
@@ -168,6 +78,7 @@
       ((null? con) state)
       (else state))))
 
+;---------- M_value-----------
 (define M_value
    (lambda (x state)
     (cond
@@ -253,17 +164,121 @@
       ((eq? '!= (operator lis)) (not (eq? (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state))))
       (else (M_value_expr lis state)))))
 
+;--------------M_bool-----------------
+(define M_bool
+  (lambda (bool)
+    (or (eq? bool #t) (eq? bool #f))))
 
+;-------------- Helper Methods-----------------
+(define isReturnPresent
+  (lambda (state)
+    (isReturnPresentHelper (getVarLis state))))
+
+(define isReturnPresentHelper
+  (lambda (varLis)
+    (cond
+      ((null? varLis) #f)
+      ((eq? 'return (car varLis)) #t)
+      (else (isReturnPresentHelper (cdr varLis))))))
+      
+(define getReturnIfPresent
+  (lambda (state)
+    (getValueFromState 'return state)))
+
+;--Error Checking Helpers--
+(define isDeclared
+  (lambda (var varLis)
+    (cond
+      ((null? varLis) (error "Undeclared variable"))
+      ((eq? (car varLis) var) #t)
+      (else (isDeclared var (cdr varLis))))))
+
+(define isAssigned
+  (lambda (var state)
+    (isAssignedHelper var (getVarLis state))))
+
+(define isAssignedHelper
+  (lambda (var varLis)
+    (cond
+      ((null? varLis) (error "Unassigned variable"))
+      ((eq? var (car varLis)) #t)
+      (else (isAssignedHelper var (cdr varLis))))))
+
+;--State Helpers--
+(define getVarLis
+  (lambda (state)
+    (car state)))
+
+(define getValLis
+  (lambda (state)
+    (cadr state)))
+
+(define addToState
+  (lambda (var val state)
+    (list (cons var (getVarLis state)) (cons val (getValLis state)))))
+
+(define removeFromState
+  (lambda (var state)
+    (cond
+      ((null? (getVarLis state)) state)
+      ((eq? (car (getVarLis state)) var) (list (cdr (getVarLis state)) (cdr (getValLis state))))
+      (else (list (cons (car (getVarLis state)) (car (removeFromState var (list (cdar state) (cdadr state)))))
+                  (cons (car (getValLis state)) (cadr (removeFromState var (list (cdar state) (cdadr state))))))))))
+
+(define getValueFromState
+  (lambda (var state)
+    (cond
+      ((null? (getVarLis state)) (error "Undeclared variable"))
+      ((and (eq? (car (getVarLis state)) var)(eq? (car (getValLis state)) 'NULL)) (error "Unassigned variable"))
+      ((eq? (car (getVarLis state)) var) (car (getValLis state)))
+      (else (getValueFromState var (list (cdar state) (cdadr state)))))))
+
+(define replaceInState
+  (lambda (var val state)
+    (cond
+      ((null? (getVarLis state)) (error "Undeclared variable" ))
+      ((eq? (car (getVarLis state)) var) (list (cons var (cdr (getVarLis state))) (cons val (cdr (getValLis state)))))
+      (else (list (cons (car (getVarLis state)) (car (replaceInState var val (list (cdar state) (cdadr state)))))
+                  (cons (car (getValLis state)) (cadr (replaceInState var val (list (cdar state) (cdadr state))))))))))
+
+;-------------- Abstractions-----------------
 (define operator
   (lambda (e)
     (car e)))
 
 (define operand1 cadr)
-(define operand2 caddr)
-(define operand3 cadddr)
-(define operand4 cddr)
-    
 
-(define M_bool
-  (lambda (bool)
-    (or (eq? bool #t) (eq? bool #f))))
+(define operand2 caddr)
+
+(define operand3 cadddr)
+
+(define operand4 cddr)
+
+(define getCondition cadr)
+
+(define getThen caddr)
+
+(define getElse
+  (lambda (line)
+    (cond
+      ((null? (cdddr line)) '())
+      (else (cadddr line)))))
+
+(define getLoopbody caddr)
+
+(define getKey
+  (lambda (line)
+    (car line)))
+
+(define getVar
+  (lambda (line)
+    (cadr line)))
+
+(define getExpr
+  (lambda (line)
+    (caddr line)))
+
+(define expressions
+  (lambda ()
+    '(+ - * / % < > <= >= == != || && !)))
+    
