@@ -200,6 +200,8 @@
     (cond
       ((null? expr) expr)
       ((number? expr) expr)
+      ((eq? expr #t) #t)
+      ((eq? expr #f) #f)
       ((not (list? expr)) (getValueFromState expr state))
       ((and (not (pair? (cdr expr))) (number? (operator expr))) (operator expr))
       ((and (not (pair? (cdr expr))) (eq? (operator expr) 'true)) #t)
