@@ -1,4 +1,3 @@
-
 ;Group 2
 ; - Jonathan Henley
 ; - Rachel Pavlakovic
@@ -21,30 +20,39 @@
 ;--------------M_state-----------------
 ;M_state is the main dispatch center which calls different state functions depending on the command in the code statement
 (define M_state
-  (lambda (exp state)
+  (lambda (exp state break continue)
     (cond
       ((null? exp) state)
-      ((eq? (getKey exp) 'if) (M_state_if exp state))
-      ((eq? (getKey exp) 'while) (M_state_while exp state))
+      ((eq? (getKey exp) 'if) (M_state_if exp state break continue))
+      ((eq? (getKey exp) 'while) (call/cc (lamba (brk) (M_state_while exp state brk continue))))
+      ((eq? (getKey exp) 'break) (break (removeLayerFromState state)))
+      ((eq? (getKey exp) 'continue) (continue (removeLayerFromState))) ;NEEDS TESTING
       ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
       ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state) (addToState (getVar exp) 'NULL state))) ;declaration with assignment
       ((eq? (getKey exp) 'return) (addToState 'return (M_value exp state) state)) ;assignment without built in declaration
       ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state))
-      ((member (getKey exp) (expressions)) (M_state_expr exp state ))
+      ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state))
+      ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
 ;M_state_if when the code has an 'if command this fucntion breaks it down into condition, then, and else and chooses them based on the condition
 (define M_state_if
-  (lambda (exp state)
+  (lambda (exp state break continue)
     (if (M_value_expr (getCondition exp) state)
-        (M_state_stmt (getThen exp) state)
-        (M_state_stmt (getElse exp) state))))
+        (if (eq? (getThen exp) 'begin)
+            (M_state (getThen exp) state break continue)
+            (M_state_stmt (getThen exp) state))
+        (if (eq? (getThen exp) 'begin)
+            (M_state (getElse exp) state break continue)
+            (M_state_stmt (getElse exp) state)))))
 
 ;M_state_while when the code has a 'while this function finds its condition and loopbody then recursively calls the loopbody until the condition is no longer true
 (define M_state_while
   (lambda (exp state)
     (if (M_value_expr (getCondition exp) state)
-        (M_state_while exp (M_state_stmt (getLoopbody exp) (M_state_cond (getCondition exp) state)))
+        (if (eq? (getLoopbody exp) 'begin)
+            (M_state_while exp (M_state (getLoopbody exp) (M_state_cond (getCondition exp) state)))
+            (M_state_while exp (M_state_stmt (getLoopbody exp) (M_state_cond (getCondition exp) state))))
         (M_state_cond (getCondition exp) state))))
 
 ;M_state_dec&assign when a variable is declared and assigned in the same line of code, this adds both the variable and value to the state
@@ -89,6 +97,19 @@
       ((null? con) state)
       (else state))))
 
+;returns the state after a block, starting with begin
+(define M_state_begin
+  (lambda (block state)
+    (parseRecurse block (addLayerToState state))))
+
+;M_state try this doesn't currently work
+(define M_state_try
+  (lambda (stmt state)
+    (M_state stmt (addLayerToState state))))
+
+
+
+
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
 (define M_value
@@ -129,8 +150,7 @@
     (cond
       ((null? expr) expr)
       ((number? expr) expr)
-      ((eq? expr #t) #t)
-      ((eq? expr #f) #f)
+      ((M_bool expr) (M_value_bool expr state))
       ((not (list? expr)) (getValueFromState expr state))
       ((and (not (pair? (rest expr))) (number? (first expr))) (first expr))
       ((and (not (pair? (rest expr))) (eq? (first expr) 'true)) #t)
@@ -186,25 +206,30 @@
       (else (M_value_expr lis state)))))
 
 ;--------------M_bool-----------------
-;M_bool checks if bool is true or false, returns boolean
+;M_bool checks if bool is true or false, returns true if boolean or false otherwise
 (define M_bool
   (lambda (bool)
-    (or (eq? bool #t) (eq? bool #f))))
+    (cond
+      ((or (eq? bool #t) (eq? bool #f)) #t)
+      ((or (eq? bool 'true) (eq? bool 'false)) #t)
+      (else #f))))
 
 ;-------------- Helper Methods-----------------
 ;When a return is found, a variable 'return is added to the state with the value of the return's expression
 ;this function is used to check in parseRecurse if a return has been called and stop program execution
+;TAIL RECURSIVE
 (define isReturnPresent
   (lambda (state)
-    (isReturnPresentHelper (getVarLis state))))
+    (isReturnPresentHelper (getVarLis state) (lambda (v) v))))
 
 ;parses through state to find variable 'return, returns true if present false otherwise
+;TAIL RECURSIVE
 (define isReturnPresentHelper
-  (lambda (varLis)
+  (lambda (varLis return)
     (cond
-      ((null? varLis) #f)
-      ((eq? 'return (first varLis)) #t)
-      (else (isReturnPresentHelper (rest varLis))))))
+      ((null? varLis) (return #f))
+      ((eq? 'return (first varLis))(return  #t))
+      (else (isReturnPresentHelper (rest varLis) return)))))
 
 ;this function is called in the event isReturnPresent is true, in parseRecurse
 ;returns the value of the return
@@ -275,12 +300,6 @@
       ((and (eq? "Undeclared variable" (getValueFromStateHelper var (first state))) (not (null? (rest state)))) (cons (first state) (replaceInState var val (rest state))))
       (else (cons (replaceInStateHelper var val (first state)) (rest state))))))
 
-;PUT THIS IN ABSTRACTIONS AFTER MERGE
-;Returns the first layer fo the state to check
-(define getNextLayer
-  (lambda (state)
-    (car state))) 
-
 ;gets the list of variable names from the state
 (define getVarLis
   (lambda (state)
@@ -322,8 +341,6 @@
       ((eq? (first (getVarLis state)) var) (list (cons var (rest (getVarLis state))) (cons val (rest (getValLis state)))))
       (else (list (cons (first (getVarLis state)) (first (replaceInStateHelper var val (list (restOfFirst state) (cdadr state)))))
                   (cons (first (getValLis state)) (firstOfRest (replaceInStateHelper var val (list (restOfFirst state) (cdadr state))))))))))
-
-
 
 ;-------------- Abstractions-----------------
 
@@ -378,3 +395,9 @@
 (define expressions
   (lambda ()
     '(+ - * / % < > <= >= == != || && !)))
+    
+;Returns the first layer fo the state to check
+(define getNextLayer
+  (lambda (state)
+    (car state))) 
+    
