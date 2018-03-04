@@ -8,7 +8,7 @@
 ;Interpret takes a filename and runs the code in the file
 (define interpret
   (lambda (fileName)
-    (parseRecurse (parser fileName) '(() ()))))
+    (parseRecurse (parser fileName) '((() ())))))
 
 ;Parserecurse recurses through parsed code and returns 
 (define parseRecurse
@@ -264,6 +264,42 @@
 
 ;state is stored as a list with two sublists. The first sublist is the variable names, the second is the corresponding variable values (NULL if the variable is unassigned)
 
+;adds a new layer to the state
+(define addLayerToState
+  (lambda (state)
+    (cons '(()()) state)))
+
+;removes the top layer of the state
+(define removeLayerFromState
+  (lambda (state)
+    (rest state)))
+
+;adds a variable and its corresponding value to the state
+(define addToState
+  (lambda (var val state)
+    (cons (addToStateHelper var val (getNextLayer state)) (rest state))))
+
+;removes a value from the state
+(define removeFromState
+  (lambda (var state)
+    (cons (removeFromStateHelper var (getNextLayer state)) (rest state))))
+
+;returns the value of a variable in the state
+(define getValueFromState
+  (lambda (var state)
+    (cond
+      ((and (eq? "Undeclared variable" (getValueFromStateHelper var (first state))) (null? (rest state))) (error "Undeclared variable"))
+      ((and (eq? "Undeclared variable" (getValueFromStateHelper var (first state))) (not (null? (rest state)))) (getValueFromState var (rest state)))
+      (else (getValueFromStateHelper var (first state))))))
+
+;replaces a variable in the state with the given value
+(define replaceInState
+  (lambda (var val state)
+    (cond
+      ((and (eq? "Undeclared variable" (getValueFromStateHelper var (first state))) (null? (rest state))) (error "Undeclared variable"))
+      ((and (eq? "Undeclared variable" (getValueFromStateHelper var (first state))) (not (null? (rest state)))) (cons (first state) (replaceInState var val (rest state))))
+      (else (cons (replaceInStateHelper var val (first state)) (rest state))))))
+
 ;gets the list of variable names from the state
 (define getVarLis
   (lambda (state)
@@ -274,13 +310,13 @@
   (lambda (state)
     (firstOfRest state)))
 
-;adds a varaible and its corresponding value to the state
-(define addToState
+;adds a variable and its corresponding value to a layer of the state
+(define addToStateHelper
   (lambda (var val state)
     (list (cons var (getVarLis state)) (cons val (getValLis state)))))
 
-;removes a variable and its corresponding value to the state
-(define removeFromState
+;removes a variable and its corresponding value to a layer of the state
+(define removeFromStateHelper
   (lambda (var state)
     (cond
       ((null? (getVarLis state)) state)
@@ -288,23 +324,23 @@
       (else (list (cons (first (getVarLis state)) (first (removeFromState var (list (restOfFirst state) (cdadr state)))))
                   (cons (first (getValLis state)) (firstOfRest (removeFromState var (list (restOfFirst state) (cdadr state))))))))))
 
-;given a variable name, this function returns that variables value 
-(define getValueFromState
+;given a variable name, this function returns that variables value from any layer in the state
+(define getValueFromStateHelper
   (lambda (var state)
     (cond
-      ((null? (getVarLis state)) (error "Undeclared variable"))
+      ((null? (getVarLis state)) "Undeclared variable")
       ((and (eq? (first (getVarLis state)) var)(eq? (first (getValLis state)) 'NULL)) (error "Unassigned variable"))
       ((eq? (first (getVarLis state)) var) (first (getValLis state)))
-      (else (getValueFromState var (list (restOfFirst state) (cdadr state)))))))
+      (else (getValueFromStateHelper var (list (restOfFirst state) (cdadr state)))))))
 
-;replaces an already existing variable value pair with an updated value - used for already declared variables that are being assigned or reassigned
-(define replaceInState
+;replaces an already existing variable value pair with an updated value in the same layer - used for already declared variables that are being assigned or reassigned
+(define replaceInStateHelper
   (lambda (var val state)
     (cond
-      ((null? (getVarLis state)) (error "Undeclared variable" ))
+      ((null? (getVarLis state)) "Undeclared variable")
       ((eq? (first (getVarLis state)) var) (list (cons var (rest (getVarLis state))) (cons val (rest (getValLis state)))))
-      (else (list (cons (first (getVarLis state)) (first (replaceInState var val (list (restOfFirst state) (cdadr state)))))
-                  (cons (first (getValLis state)) (firstOfRest (replaceInState var val (list (restOfFirst state) (cdadr state))))))))))
+      (else (list (cons (first (getVarLis state)) (first (replaceInStateHelper var val (list (restOfFirst state) (cdadr state)))))
+                  (cons (first (getValLis state)) (firstOfRest (replaceInStateHelper var val (list (restOfFirst state) (cdadr state))))))))))
 
 ;-------------- Abstractions-----------------
 
@@ -359,4 +395,9 @@
 (define expressions
   (lambda ()
     '(+ - * / % < > <= >= == != || && !)))
+    
+;Returns the first layer fo the state to check
+(define getNextLayer
+  (lambda (state)
+    (car state))) 
     
