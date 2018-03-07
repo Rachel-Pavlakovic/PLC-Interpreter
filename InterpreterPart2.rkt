@@ -10,12 +10,21 @@
   (lambda (fileName)
     (parseRecurse (parser fileName) '((() ())) (lambda (v1) v1) (lambda (v2) v2))))
 
-;Parserecurse recurses through parsed code and returns 
+;Parserecurse recurses through parsed code and returns the return value
 (define parseRecurse
   (lambda (statement state break continue)
     (cond
       ((isReturnPresent state) (getReturnIfPresent state))
       (else (parseRecurse (rest statement) (M_state (first statement) state break continue) (lambda (v1) v1) (lambda (v2) v2))))))
+
+;Parserecurse recurses through parsed code and returns the state after a block of code
+(define parseRecurseBlock
+  (lambda (statement state break continue)
+    (cond
+      ((null? statement) state)
+      ((isReturnPresent state) (parseRecurse statement state break continue))
+      (else (parseRecurseBlock (rest statement) (M_state (first statement) state break continue) (lambda (v1) v1) (lambda (v2) v2))))))
+
 
 ;--------------M_state-----------------
 ;M_state is the main dispatch center which calls different state functions depending on the command in the code statement
@@ -24,7 +33,7 @@
     (cond
       ((null? exp) state)
       ((eq? (getKey exp) 'if) (M_state_if exp state break continue))
-      ((eq? (getKey exp) 'while) (call/cc (lamba (brk) (M_state_while exp state brk continue))))
+      ((eq? (getKey exp) 'while) (call/cc (lambda (brk) (M_state_while exp state brk continue))))
       ((eq? (getKey exp) 'break) (break (removeLayerFromState state)))
       ((eq? (getKey exp) 'continue) (continue (removeLayerFromState))) ;NEEDS TESTING
       ((eq? (getKey exp) 'try) (M_state_try exp state))
@@ -50,11 +59,11 @@
 
 ;M_state_while when the code has a 'while this function finds its condition and loopbody then recursively calls the loopbody until the condition is no longer true
 (define M_state_while
-  (lambda (exp state)
+  (lambda (exp state break continue)
     (if (M_value_expr (getCondition exp) state)
-        (if (eq? (getLoopbody exp) 'begin)
-            (M_state_while exp (M_state (getLoopbody exp) (M_state_cond (getCondition exp) state)))
-            (M_state_while exp (M_state_stmt (getLoopbody exp) (M_state_cond (getCondition exp) state))))
+        (if (eq? (car (getLoopbody exp)) 'begin)
+            (M_state_while exp (M_state (cdr (getLoopbody exp)) (M_state_cond (getCondition exp) state) break continue) break continue)
+            (M_state_while exp (M_state_stmt (getLoopbody exp) (M_state_cond (getCondition exp) state)) break continue))
         (M_state_cond (getCondition exp) state))))
 
 ;M_state_dec&assign when a variable is declared and assigned in the same line of code, this adds both the variable and value to the state
@@ -66,9 +75,9 @@
 (define M_state_assign
   (lambda (var expr state)
     (cond
-      ((and (isDeclared var (getVarLis state)) (eq? var expr)) state)
+      ((and (isDeclared var state) (eq? var expr)) state)
       ((isAssigned var state) (replaceInState var (M_value_expr expr state) state))
-      ((isDeclared var (getVarLis state)) (replaceInState var (M_value_expr expr state) state)))))
+      ((isDeclared var state) (replaceInState var (M_value_expr expr state) state)))))
 ;addToState var (M_value_expr expr (M_state_expr expr (removeFromState var state))) (M_state_expr expr (removeFromState var state)
 
 ;M_state_expr when M_state doesn't find the key to be if, while, return, etc. this checks the expr to see if it is a statement or value
@@ -103,7 +112,7 @@
 ;returns the state after a block, starting with begin
 (define M_state_begin
   (lambda (block state break continue)
-    (removeLayerFromState (parseRecurse block (addLayerToState state) break continue))))
+    (removeLayerFromState (parseRecurseBlock block (addLayerToState state) break continue))))
 
 ;returns the state after a try block
 (define M_state_try
@@ -224,7 +233,7 @@
   (lambda (lis state)
     (cond
       ((number? lis) lis)
-      ((and (not (pair? lis)) (isAssigned lis state)) (M_value_var lis state))
+      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state))
       ((eq? '+ (operator lis)) (+ (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
       ((and (eq? '- (operator lis)) (not (pair? (restOfRest lis)))) (- (M_value_int (operand1 lis) state)))
       ((and (eq? '- (operator lis)) (pair? (restOfRest lis))) (- (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
@@ -242,7 +251,7 @@
       ((eq? lis 'false) #f)
       ((eq? lis #t) #t)
       ((eq? lis #f) #f)
-      ((and (not (pair? lis)) (isAssigned lis state)) (M_value_var lis state))
+      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state))
       ((eq? '&& (operator lis)) (and (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
       ((eq? '|| (operator lis)) (or (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
       ((eq? '! (operator lis)) (not (M_value_bool (operand1 lis) state)))
@@ -254,7 +263,7 @@
   (lambda (lis state)
     (cond
       ((number? lis) lis)
-      ((and (not (pair? lis)) (isAssigned lis state)) (M_value_var lis state))
+      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state))
       ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state) (M_value_comp (operand2 lis) state)))
       ((eq? '< (operator lis)) (< (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
       ((eq? '>= (operator lis)) (>= (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
@@ -341,7 +350,13 @@
   (lambda (var state)
     (cond
       ((isAssignedMain var state) #t)
-      (else (error "Unassigned variable")))))
+      (else #f))))
+
+(define isAssignedError
+  (lambda (var state)
+    (cond
+      ((isAssignedMain var state) #t)
+      (else (error "Unassigned Variable")))))
 
 (define isAssignedMain
   (lambda (var state)
