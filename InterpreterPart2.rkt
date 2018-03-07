@@ -50,8 +50,8 @@
 (define M_state_if
   (lambda (exp state break continue)
     (if (M_value_expr (getCondition exp) state)
-        (if (eq? (getThen exp) 'begin)
-            (M_state (getThen exp) state break continue)
+        (if (eq? (car (getLoopbody exp)) 'begin)
+            (M_state (getLoopbody exp) state break continue)
             (M_state_stmt (getThen exp) state))
         (if (eq? (getThen exp) 'begin)
             (M_state (getElse exp) state break continue)
