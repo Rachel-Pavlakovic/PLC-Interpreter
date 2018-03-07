@@ -27,8 +27,8 @@
       ((eq? (getKey exp) 'while) (call/cc (lamba (brk) (M_state_while exp state brk continue))))
       ((eq? (getKey exp) 'break) (break (removeLayerFromState state)))
       ((eq? (getKey exp) 'continue) (continue (removeLayerFromState))) ;NEEDS TESTING
-      ;((eq? (getKey exp) 'try) (call/cc (lambda (brk) (M_state_try exp state brk))))
-      ;((and (eq? (getKey exp) 'throw) (catchExists)) (break (M_state_catch (firstOfRest exp) (removeLayerFromState state))))
+      ((eq? (getKey exp) 'try) (M_state_try exp state))
+      ((eq? (getKey exp) 'finally) (M_state_finally exp state))
       ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
       ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state) (addToState (getVar exp) 'NULL state))) ;declaration with assignment
       ((eq? (getKey exp) 'return) (addToState 'return (M_value exp state) state)) ;assignment without built in declaration
@@ -103,35 +103,70 @@
 ;returns the state after a block, starting with begin
 (define M_state_begin
   (lambda (block state break continue)
-    (parseRecurse block (addLayerToState state) break continue)))
+    (removeLayerFromState (parseRecurse block (addLayerToState state) break continue))))
 
 ;returns the state after a try block
-;(define M_state_try
-;  (lambda (block state)
-;    (if (catchExsists)
-;        (M_state_catch (getCatchBlock block) (M_state_try_helper (cadr block) state))
-        
-
-
-;(define M_state_try_helper
-;  (lambda (block state break)
-;    (cond
-;      
-;      ((and (eq? (getKey block) 'throw) (catchExists)) (M_state_catch (getCatchBlock block) (rest block) state))
-;      ((and (eq? (getKey block) 'catch) (catchExists))                                                
-;      ((catchExists))))))
-
-
+(define M_state_try
+  (lambda (block state)
+    (call/cc
+     (lambda (break)
+       (M_state_try_helper block state break)))))
+      
+;helper for try       
+(define M_state_try_helper
+  (lambda (block state break)
+    (if (null? block)
+      (state)
+      (if (catchExists block)
+          ((eq? (getKey block) 'throw) (break (M_state_catch (getCatchBlock block) (getVarName block) (cdr block) state)))
+          (if (finallyExists block)
+              ((eq? (getKey block) 'throw) (break (M_state_finally (getFinally block) state)))
+              (M_state block state '() '()))))))
+          
 ;returns the state after a catch block
-;(define M_state_catch
-;  (lambda (block e state)
-;    (if (null? e)
-        ;do block) return state
-        ;dont do block return state
+(define M_state_catch
+  (lambda (block var val state)
+    (removeLayerFromState (M_state block (addToState var val (addLayerToState state)) '() '()))))
 
+;returns the state after a finally block
+(define M_state_finally
+  (lambda (block state)
+    (removeLayerFromState (M_state block (addLayerToState state) '() '()))))
+    
+(define catchExists
+  (lambda (stmt)
+    (cond
+      ((null? stmt) #f)
+      ((eq? (getKey stmt) 'catch) #t)
+      (else (catchExists (rest stmt))))))
 
+(define getCatchBlock
+  (lambda (stmt)
+    (cond
+      ((null? stmt) '())
+      ((eq? (getKey stmt) 'catch) (caddr stmt))
+      (else (getCatchBlock (cdr stmt))))))
 
+(define finallyExists
+  (lambda (stmt)
+    (cond
+      ((null? stmt) #f)
+      ((eq? (getKey stmt) 'finally) #t)
+      (else (finallyExists (rest stmt))))))
 
+(define getFinally
+  (lambda (stmt)
+    (cond
+      ((null? stmt) '())
+      ((eq? (getKey stmt) 'finally) (caddr stmt))
+      (else (getFinally (cdr stmt))))))
+
+(define getVarName
+  (lambda (stmt)
+    (cond
+      ((null? stmt) '())
+      ((eq? (getKey stmt) 'catch) (cadr stmt))
+      (else (getVarName (cdr stmt))))))
 
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
@@ -259,17 +294,6 @@
 (define getReturnIfPresent
   (lambda (state)
     (getValueFromState 'return state)))
-
-(define catchExists
-  (lambda (stmt)
-    (cond
-      ((null? stmt) #f)
-      ((eq? (getKey stmt) 'catch) #t)
-      (else (catchExists (rest stmt))))))
-
-(define getCatchBlock
-  (lambda (stmt)
-    ()))
 
 ;--Error Checking Helpers--
 
