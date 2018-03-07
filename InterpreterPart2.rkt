@@ -8,14 +8,14 @@
 ;Interpret takes a filename and runs the code in the file
 (define interpret
   (lambda (fileName)
-    (parseRecurse (parser fileName) '((() ())))))
+    (parseRecurse (parser fileName) '((() ())) (lambda (v1) v1) (lambda (v2) v2))))
 
 ;Parserecurse recurses through parsed code and returns 
 (define parseRecurse
-  (lambda (statement state)
+  (lambda (statement state break continue)
     (cond
       ((isReturnPresent state) (getReturnIfPresent state))
-      (else (parseRecurse (rest statement) (M_state (first statement) state))))))
+      (else (parseRecurse (rest statement) (M_state (first statement) state break continue) (lambda (v1) v1) (lambda (v2) v2))))))
 
 ;--------------M_state-----------------
 ;M_state is the main dispatch center which calls different state functions depending on the command in the code statement
@@ -27,11 +27,13 @@
       ((eq? (getKey exp) 'while) (call/cc (lamba (brk) (M_state_while exp state brk continue))))
       ((eq? (getKey exp) 'break) (break (removeLayerFromState state)))
       ((eq? (getKey exp) 'continue) (continue (removeLayerFromState))) ;NEEDS TESTING
+      ;((eq? (getKey exp) 'try) (call/cc (lambda (brk) (M_state_try exp state brk))))
+      ;((and (eq? (getKey exp) 'throw) (catchExists)) (break (M_state_catch (firstOfRest exp) (removeLayerFromState state))))
       ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
       ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state) (addToState (getVar exp) 'NULL state))) ;declaration with assignment
       ((eq? (getKey exp) 'return) (addToState 'return (M_value exp state) state)) ;assignment without built in declaration
       ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state))
-      ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state))
+      ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue))
       ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
@@ -66,7 +68,8 @@
     (cond
       ((and (isDeclared var (getVarLis state)) (eq? var expr)) state)
       ((isAssigned var state) (replaceInState var (M_value_expr expr state) state))
-      ((isDeclared var (getVarLis state)) (addToState var (M_value_expr expr (M_state_expr expr (removeFromState var state))) (M_state_expr expr (removeFromState var state)))))))
+      ((isDeclared var (getVarLis state)) (replaceInState var (M_value_expr expr state) state)))))
+;addToState var (M_value_expr expr (M_state_expr expr (removeFromState var state))) (M_state_expr expr (removeFromState var state)
 
 ;M_state_expr when M_state doesn't find the key to be if, while, return, etc. this checks the expr to see if it is a statement or value
 (define M_state_expr
@@ -99,13 +102,33 @@
 
 ;returns the state after a block, starting with begin
 (define M_state_begin
-  (lambda (block state)
-    (parseRecurse block (addLayerToState state))))
+  (lambda (block state break continue)
+    (parseRecurse block (addLayerToState state) break continue)))
 
-;M_state try this doesn't currently work
-(define M_state_try
-  (lambda (stmt state)
-    (M_state stmt (addLayerToState state))))
+;returns the state after a try block
+;(define M_state_try
+;  (lambda (block state)
+;    (if (catchExsists)
+;        (M_state_catch (getCatchBlock block) (M_state_try_helper (cadr block) state))
+        
+
+
+;(define M_state_try_helper
+;  (lambda (block state break)
+;    (cond
+;      
+;      ((and (eq? (getKey block) 'throw) (catchExists)) (M_state_catch (getCatchBlock block) (rest block) state))
+;      ((and (eq? (getKey block) 'catch) (catchExists))                                                
+;      ((catchExists))))))
+
+
+;returns the state after a catch block
+;(define M_state_catch
+;  (lambda (block e state)
+;    (if (null? e)
+        ;do block) return state
+        ;dont do block return state
+
 
 
 
@@ -220,10 +243,17 @@
 ;TAIL RECURSIVE
 (define isReturnPresent
   (lambda (state)
-    (isReturnPresentHelper (getVarLis state) (lambda (v) v))))
+    (isReturnPresentMain state (lambda (v) v))))
 
 ;parses through state to find variable 'return, returns true if present false otherwise
 ;TAIL RECURSIVE
+(define isReturnPresentMain
+  (lambda (state return)
+    (cond
+      ((null? state) (return #f))
+      ((null? (cdr state)) (isReturnPresentHelper (getVarLis (car state)) return))
+      (else (or (isReturnPresentHelper (getVarLis (car state)) return) (isReturnPresentMain (cdr state) return))))))
+
 (define isReturnPresentHelper
   (lambda (varLis return)
     (cond
@@ -237,28 +267,61 @@
   (lambda (state)
     (getValueFromState 'return state)))
 
+(define catchExists
+  (lambda (stmt)
+    (cond
+      ((null? stmt) #f)
+      ((eq? (getKey stmt) 'catch) #t)
+      (else (catchExists (rest stmt))))))
+
+(define getCatchBlock
+  (lambda (stmt)
+    ()))
+
 ;--Error Checking Helpers--
 
 ;checks to see if a variable has been declared or not
 (define isDeclared
+  (lambda (var state)
+    (cond
+      ((isDeclaredMain var state) #t)
+      (else (error "Undeclared variable")))))
+
+(define isDeclaredMain
+  (lambda (var state)
+    (cond
+      ((null? state) #f)
+      ((null? (cdr state)) (isDeclaredHelper var (getVarLis (car state))))
+      (else (or (isDeclaredHelper var (getVarLis (car state))) (isDeclaredMain var (cdr state)))))))
+
+(define isDeclaredHelper
   (lambda (var varLis)
     (cond
-      ((null? varLis) (error "Undeclared variable"))
+      ((null? varLis) #f)
       ((eq? (first varLis) var) #t)
-      (else (isDeclared var (rest varLis))))))
+      (else (isDeclaredHelper var (rest varLis))))))
 
 ;checks to see if a varaible has been assigned or not
 (define isAssigned
   (lambda (var state)
-    (isAssignedHelper var (getVarLis state))))
+    (cond
+      ((isAssignedMain var state) #t)
+      (else (error "Unassigned variable")))))
+
+(define isAssignedMain
+  (lambda (var state)
+    (cond
+      ((null? state) #f)
+      ((null? (cdr state)) (isAssignedHelper var (getVarLis (car state)) (getValLis (car state))))
+      (else (or (isAssignedHelper var (getVarLis (car state)) (getValLis (car state))) (isAssignedMain var (cdr state)))))))
 
 ;parses through state to find input variable if it is present
 (define isAssignedHelper
-  (lambda (var varLis)
+  (lambda (var varLis valLis)
     (cond
-      ((null? varLis) (error "Unassigned variable"))
-      ((eq? var (first varLis)) #t)
-      (else (isAssignedHelper var (rest varLis))))))
+      ((null? varLis) #f)
+      ((and (eq? var (first varLis)) (not (eq? 'NULL (first valLis)))) #t)
+      (else (isAssignedHelper var (rest varLis) (rest valLis))))))
 
 ;--State Helpers--
 
@@ -290,6 +353,7 @@
     (cond
       ((and (eq? "Undeclared variable" (getValueFromStateHelper var (first state))) (null? (rest state))) (error "Undeclared variable"))
       ((and (eq? "Undeclared variable" (getValueFromStateHelper var (first state))) (not (null? (rest state)))) (getValueFromState var (rest state)))
+      ((eq? "Unassigned variable" (getValueFromStateHelper var (first state))) (error "Unassigned variable"))
       (else (getValueFromStateHelper var (first state))))))
 
 ;replaces a variable in the state with the given value
@@ -329,7 +393,7 @@
   (lambda (var state)
     (cond
       ((null? (getVarLis state)) "Undeclared variable")
-      ((and (eq? (first (getVarLis state)) var)(eq? (first (getValLis state)) 'NULL)) (error "Unassigned variable"))
+      ((and (eq? (first (getVarLis state)) var)(eq? (first (getValLis state)) 'NULL)) "Unassigned variable")
       ((eq? (first (getVarLis state)) var) (first (getValLis state)))
       (else (getValueFromStateHelper var (list (restOfFirst state) (cdadr state)))))))
 
@@ -400,4 +464,3 @@
 (define getNextLayer
   (lambda (state)
     (car state))) 
-    
