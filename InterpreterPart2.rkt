@@ -62,7 +62,7 @@
   (lambda (exp state break continue)
     (if (M_value_expr (getCondition exp) state)
         (if (eq? (car (getLoopbody exp)) 'begin)
-            (M_state_while exp (M_state (cdr (getLoopbody exp)) (M_state_cond (getCondition exp) state) break continue) break continue)
+            (M_state_while exp (parseRecurseBlock (cdr (getLoopbody exp)) (M_state_cond (getCondition exp) state) break continue) break continue)
             (M_state_while exp (M_state_stmt (getLoopbody exp) (M_state_cond (getCondition exp) state)) break continue))
         (M_state_cond (getCondition exp) state))))
 
