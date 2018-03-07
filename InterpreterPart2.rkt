@@ -278,10 +278,17 @@
 ;TAIL RECURSIVE
 (define isReturnPresent
   (lambda (state)
-    (isReturnPresentHelper (getVarLis state) (lambda (v) v))))
+    (isReturnPresentMain state (lambda (v) v))))
 
 ;parses through state to find variable 'return, returns true if present false otherwise
 ;TAIL RECURSIVE
+(define isReturnPresentMain
+  (lambda (state return)
+    (cond
+      ((null? state) (return #f))
+      ((null? (cdr state)) (isReturnPresentHelper (getVarLis (car state)) return))
+      (else (or (isReturnPresentHelper (getVarLis (car state)) return) (isReturnPresentMain (cdr state) return))))))
+
 (define isReturnPresentHelper
   (lambda (varLis return)
     (cond
@@ -295,28 +302,61 @@
   (lambda (state)
     (getValueFromState 'return state)))
 
+(define catchExists
+  (lambda (stmt)
+    (cond
+      ((null? stmt) #f)
+      ((eq? (getKey stmt) 'catch) #t)
+      (else (catchExists (rest stmt))))))
+
+(define getCatchBlock
+  (lambda (stmt)
+    ()))
+
 ;--Error Checking Helpers--
 
 ;checks to see if a variable has been declared or not
 (define isDeclared
+  (lambda (var state)
+    (cond
+      ((isDeclaredMain var state) #t)
+      (else (error "Undeclared variable")))))
+
+(define isDeclaredMain
+  (lambda (var state)
+    (cond
+      ((null? state) #f)
+      ((null? (cdr state)) (isDeclaredHelper var (getVarLis (car state))))
+      (else (or (isDeclaredHelper var (getVarLis (car state))) (isDeclaredMain var (cdr state)))))))
+
+(define isDeclaredHelper
   (lambda (var varLis)
     (cond
-      ((null? varLis) (error "Undeclared variable"))
+      ((null? varLis) #f)
       ((eq? (first varLis) var) #t)
-      (else (isDeclared var (rest varLis))))))
+      (else (isDeclaredHelper var (rest varLis))))))
 
 ;checks to see if a varaible has been assigned or not
 (define isAssigned
   (lambda (var state)
-    (isAssignedHelper var (getVarLis state))))
+    (cond
+      ((isAssignedMain var state) #t)
+      (else (error "Unassigned variable")))))
+
+(define isAssignedMain
+  (lambda (var state)
+    (cond
+      ((null? state) #f)
+      ((null? (cdr state)) (isAssignedHelper var (getVarLis (car state)) (getValLis (car state))))
+      (else (or (isAssignedHelper var (getVarLis (car state)) (getValLis (car state))) (isAssignedMain var (cdr state)))))))
 
 ;parses through state to find input variable if it is present
 (define isAssignedHelper
-  (lambda (var varLis)
+  (lambda (var varLis valLis)
     (cond
-      ((null? varLis) (error "Unassigned variable"))
-      ((eq? var (first varLis)) #t)
-      (else (isAssignedHelper var (rest varLis))))))
+      ((null? varLis) #f)
+      ((and (eq? var (first varLis)) (not (eq? 'NULL (first valLis)))) #t)
+      (else (isAssignedHelper var (rest varLis) (rest valLis))))))
 
 ;--State Helpers--
 
@@ -459,4 +499,3 @@
 (define getNextLayer
   (lambda (state)
     (car state))) 
-    
