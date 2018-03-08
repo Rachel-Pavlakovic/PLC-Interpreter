@@ -10,21 +10,21 @@
   (lambda (fileName)
     (call/cc
      (lambda (return)
-       (parseRecurse (parser fileName) '((() ())) (lambda (v1) v1) (lambda (v2) v2) return)))))
+       (parseRecurse (parser fileName) '((() ())) (lambda (v1) (error "Invalid use of break")) (lambda (v2) (error "Invalid use of continue")) return)))))
 
 ;Parserecurse recurses through parsed code and returns the return value
 (define parseRecurse
   (lambda (statement state break continue return)
     (cond
       ((null? statement) (error "No return statement"))
-      (else (parseRecurse (rest statement) (M_state (first statement) state break continue return) (lambda (v1) v1) (lambda (v2) v2) return)))))
+      (else (parseRecurse (rest statement) (M_state (first statement) state break continue return) break continue return)))))
 
 ;Parserecurse recurses through parsed code and returns the state after a block of code
 (define parseRecurseBlock
   (lambda (statement state break continue return)
     (cond
       ((null? statement) state)
-      (else (parseRecurseBlock (rest statement) (M_state (first statement) state break continue return) (lambda (v1) v1) (lambda (v2) v2) return)))))
+      (else (parseRecurseBlock (rest statement) (M_state (first statement) state break continue return) break continue return)))))
 
 
 ;--------------M_state-----------------
@@ -36,7 +36,7 @@
       ((eq? (getKey exp) 'if) (M_state_if exp state break continue return))
       ((eq? (getKey exp) 'while) (call/cc (lambda (brk) (M_state_while exp state brk continue return))))
       ((eq? (getKey exp) 'break) (break (removeLayerFromState state)))
-      ((eq? (getKey exp) 'continue) (continue (removeLayerFromState))) ;NEEDS TESTING
+      ((eq? (getKey exp) 'continue) (continue state))
       ((eq? (getKey exp) 'try) (M_state_try exp state))
       ((eq? (getKey exp) 'finally) (M_state_finally exp state))
       ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
@@ -59,7 +59,7 @@
 (define M_state_while
   (lambda (exp state break continue return)
     (cond
-      ((M_value_expr (getCondition exp) state) (M_state_while exp (M_state (getLoopbody exp) state break continue return) break continue return))
+      ((M_value_expr (getCondition exp) state) (M_state_while exp (call/cc (lambda (cont) (M_state (getLoopbody exp) state break cont return))) break continue return))
       (else state))))
 
 ;M_state_dec&assign when a variable is declared and assigned in the same line of code, this adds both the variable and value to the state
