@@ -8,69 +8,59 @@
 ;Interpret takes a filename and runs the code in the file
 (define interpret
   (lambda (fileName)
-    (parseRecurse (parser fileName) '((() ())) (lambda (v1) v1) (lambda (v2) v2))))
+    (call/cc
+     (lambda (return)
+       (parseRecurse (parser fileName) '((() ())) (lambda (v1) v1) (lambda (v2) v2) return)))))
 
 ;Parserecurse recurses through parsed code and returns the return value
 (define parseRecurse
-  (lambda (statement state break continue)
+  (lambda (statement state break continue return)
     (cond
-      ((isReturnPresent state) (getReturnIfPresent state))
-      (else (parseRecurse (rest statement) (M_state (first statement) state break continue) (lambda (v1) v1) (lambda (v2) v2))))))
+      ((null? statement) (error "No return statement"))
+      (else (parseRecurse (rest statement) (M_state (first statement) state break continue return) (lambda (v1) v1) (lambda (v2) v2) return)))))
 
 ;Parserecurse recurses through parsed code and returns the state after a block of code
 (define parseRecurseBlock
-  (lambda (statement state brk continue)
-    (call/cc
-     (lambda (break)
-       (parseRecurseBlockHelper statement state brk continue break)))))
-
-(define parseRecurseBlockHelper
-  (lambda (statement state brk continue break)
+  (lambda (statement state break continue return)
     (cond
       ((null? statement) state)
-      ((isReturnPresent state) (break (getReturnIfPresent state)))
-      (else (parseRecurseBlock (rest statement) (M_state (first statement) state brk continue) (lambda (v1) v1) (lambda (v2) v2))))))
+      (else (parseRecurseBlock (rest statement) (M_state (first statement) state break continue return) (lambda (v1) v1) (lambda (v2) v2) return)))))
 
 
 ;--------------M_state-----------------
 ;M_state is the main dispatch center which calls different state functions depending on the command in the code statement
 (define M_state
-  (lambda (exp state break continue)
+  (lambda (exp state break continue return)
     (cond
       ((null? exp) state)
-      ((eq? (getKey exp) 'if) (M_state_if exp state break continue))
-      ((eq? (getKey exp) 'while) (call/cc (lambda (brk) (M_state_while exp state brk continue))))
+      ((eq? (getKey exp) 'if) (M_state_if exp state break continue return))
+      ((eq? (getKey exp) 'while) (call/cc (lambda (brk) (M_state_while exp state brk continue return))))
       ((eq? (getKey exp) 'break) (break (removeLayerFromState state)))
       ((eq? (getKey exp) 'continue) (continue (removeLayerFromState))) ;NEEDS TESTING
       ((eq? (getKey exp) 'try) (M_state_try exp state))
       ((eq? (getKey exp) 'finally) (M_state_finally exp state))
       ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
       ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state) (addToState (getVar exp) 'NULL state))) ;declaration with assignment
-      ((eq? (getKey exp) 'return) (addToState 'return (M_value exp state) state)) ;assignment without built in declaration
-      ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state))
-      ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue))
+      ((eq? (getKey exp) 'return) (return (M_value exp state))) 
+      ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state)) ;assignment without built in declaration
+      ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue return))
       ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
 ;M_state_if when the code has an 'if command this fucntion breaks it down into condition, then, and else and chooses them based on the condition
 (define M_state_if
-  (lambda (exp state break continue)
-    (if (M_value_expr (getCondition exp) state)
-        (if (eq? (car (getLoopbody exp)) 'begin)
-            (M_state (getLoopbody exp) state break continue)
-            (M_state_stmt (getThen exp) state))
-        (if (eq? (getThen exp) 'begin)
-            (M_state (getElse exp) state break continue)
-            (M_state_stmt (getElse exp) state)))))
+  (lambda (exp state break continue return)
+    (cond
+      ((M_value_expr (getCondition exp) state) (M_state (getThen exp) state break continue return))
+      ((null? (cdddr exp)) state)
+      (else (M_state (getElse exp) state break continue return)))))
 
 ;M_state_while when the code has a 'while this function finds its condition and loopbody then recursively calls the loopbody until the condition is no longer true
 (define M_state_while
-  (lambda (exp state break continue)
-    (if (M_value_expr (getCondition exp) state)
-        (if (eq? (car (getLoopbody exp)) 'begin)
-            (M_state_while exp (parseRecurseBlock (cdr (getLoopbody exp)) (M_state_cond (getCondition exp) state) break continue) break continue)
-            (M_state_while exp (M_state_stmt (getLoopbody exp) (M_state_cond (getCondition exp) state)) break continue))
-        (M_state_cond (getCondition exp) state))))
+  (lambda (exp state break continue return)
+    (cond
+      ((M_value_expr (getCondition exp) state) (M_state_while exp (M_state (getLoopbody exp) state break continue return) break continue return))
+      (else state))))
 
 ;M_state_dec&assign when a variable is declared and assigned in the same line of code, this adds both the variable and value to the state
 (define M_state_dec&assign
@@ -117,8 +107,8 @@
 
 ;returns the state after a block, starting with begin
 (define M_state_begin
-  (lambda (block state break continue)
-    (removeLayerFromState (parseRecurseBlock block (addLayerToState state) break continue))))
+  (lambda (block state break continue return)
+    (removeLayerFromState (parseRecurseBlock block (addLayerToState state) break continue return))))
 
 ;returns the state after a try block
 (define M_state_try
@@ -147,41 +137,6 @@
 (define M_state_finally
   (lambda (block state)
     (removeLayerFromState (M_state block (addLayerToState state) '() '()))))
-    
-(define catchExists
-  (lambda (stmt)
-    (cond
-      ((null? stmt) #f)
-      ((eq? (getKey stmt) 'catch) #t)
-      (else (catchExists (rest stmt))))))
-
-(define getCatchBlock
-  (lambda (stmt)
-    (cond
-      ((null? stmt) '())
-      ((eq? (getKey stmt) 'catch) (caddr stmt))
-      (else (getCatchBlock (cdr stmt))))))
-
-(define finallyExists
-  (lambda (stmt)
-    (cond
-      ((null? stmt) #f)
-      ((eq? (getKey stmt) 'finally) #t)
-      (else (finallyExists (rest stmt))))))
-
-(define getFinally
-  (lambda (stmt)
-    (cond
-      ((null? stmt) '())
-      ((eq? (getKey stmt) 'finally) (caddr stmt))
-      (else (getFinally (cdr stmt))))))
-
-(define getVarName
-  (lambda (stmt)
-    (cond
-      ((null? stmt) '())
-      ((eq? (getKey stmt) 'catch) (cadr stmt))
-      (else (getVarName (cdr stmt))))))
 
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
@@ -317,6 +272,7 @@
   (lambda (state)
     (getValueFromState 'return state)))
 
+;checks to see if there is a catch statement that exists
 (define catchExists
   (lambda (stmt)
     (cond
@@ -324,9 +280,37 @@
       ((eq? (getKey stmt) 'catch) #t)
       (else (catchExists (rest stmt))))))
 
+;called only when we know that a catch statement exists, returns the block of code that makes up the catch block
 (define getCatchBlock
   (lambda (stmt)
-    ()))
+    (cond
+      ((null? stmt) '())
+      ((eq? (getKey stmt) 'catch) (caddr stmt))
+      (else (getCatchBlock (cdr stmt))))))
+
+;checks to see if there is a finally after thr try or catch
+(define finallyExists
+  (lambda (stmt)
+    (cond
+      ((null? stmt) #f)
+      ((eq? (getKey stmt) 'finally) #t)
+      (else (finallyExists (rest stmt))))))
+
+;called only when we know there is going to be a finally block; returns the block of code that makes up the finally
+(define getFinally
+  (lambda (stmt)
+    (cond
+      ((null? stmt) '())
+      ((eq? (getKey stmt) 'finally) (caddr stmt))
+      (else (getFinally (cdr stmt))))))
+
+;gets the name of the variable that is being thrown
+(define getVarName
+  (lambda (stmt)
+    (cond
+      ((null? stmt) '())
+      ((eq? (getKey stmt) 'catch) (cadr stmt))
+      (else (getVarName (cdr stmt))))))
 
 ;--Error Checking Helpers--
 
@@ -358,6 +342,7 @@
       ((isAssignedMain var state) #t)
       (else #f))))
 
+;checks and potentially throws an error for unasigned variables
 (define isAssignedError
   (lambda (var state)
     (cond
