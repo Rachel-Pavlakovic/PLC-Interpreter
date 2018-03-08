@@ -108,7 +108,7 @@
 ;returns the state after a block, starting with begin
 (define M_state_begin
   (lambda (block state break continue return)
-    (removeLayerFromState (parseRecurseBlock block (addLayerToState state) break continue return))))
+     (removeLayerFromState (call/cc (lambda (cont)(parseRecurseBlock block (addLayerToState state) break cont return))))))
 
 ;returns the state after a try block
 (define M_state_try
