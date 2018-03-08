@@ -19,11 +19,17 @@
 
 ;Parserecurse recurses through parsed code and returns the state after a block of code
 (define parseRecurseBlock
-  (lambda (statement state break continue)
+  (lambda (statement state brk continue)
+    (call/cc
+     (lambda (break)
+       (parseRecurseBlockHelper statement state brk continue break)))))
+
+(define parseRecurseBlockHelper
+  (lambda (statement state brk continue break)
     (cond
       ((null? statement) state)
-      ((isReturnPresent state) (parseRecurse statement state break continue))
-      (else (parseRecurseBlock (rest statement) (M_state (first statement) state break continue) (lambda (v1) v1) (lambda (v2) v2))))))
+      ((isReturnPresent state) (break (getReturnIfPresent state)))
+      (else (parseRecurseBlock (rest statement) (M_state (first statement) state brk continue) (lambda (v1) v1) (lambda (v2) v2))))))
 
 
 ;--------------M_state-----------------
