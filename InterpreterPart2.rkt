@@ -115,7 +115,7 @@
   (lambda (block state break continue return throw)
     (cond
       ((finallyExists block) (parseRecurseBlock (getFinally block) (removeLayerFromState (M_state_try_catch block (addLayerToState state) break continue return throw))break continue return throw))
-      (else (parseRecurseBlock block (addLayerToState state) break continue return throw)))))
+      (else (M_state_try_catch block (addLayerToState state) break continue return throw)))))
 
 (define M_state_try_catch
   (lambda (block state break continue return throw)
@@ -291,6 +291,7 @@
   (lambda (stmt)
     (cond
       ((null? stmt) #f)
+      ((null? (car stmt)) #f)
       ((eq? (getKey (getKey stmt)) 'finally) #t)
       (else (finallyExists (rest stmt))))))
 
