@@ -37,7 +37,7 @@
       ((eq? (getKey exp) 'while) (call/cc (lambda (brk) (M_state_while exp state brk continue return throw))))
       ((eq? (getKey exp) 'break) (break (removeLayerFromState state)))
       ((eq? (getKey exp) 'continue) (continue state))
-      ((eq? (getKey exp) 'try) (M_state_try exp state break continue return throw))
+      ((eq? (getKey exp) 'try) (M_state_try (rest exp) state break continue return throw))
       ((eq? (getKey exp) 'throw) (throw (M_value (cadr exp) state) state))
       ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
       ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state) (addToState (getVar exp) 'NULL state))) ;declaration with assignment
@@ -114,7 +114,7 @@
 (define M_state_try
   (lambda (block state break continue return throw)
     (cond
-      ((finallyExists (cdr block)) (parseRecurseBlock (getFinally (cdr block)) (removeLayerFromState (M_state_try_catch (cdr block) (addLayerToState state) break continue return throw))break continue return throw))
+      ((finallyExists block) (parseRecurseBlock (getFinally block) (removeLayerFromState (M_state_try_catch block (addLayerToState state) break continue return throw))break continue return throw))
       (else (parseRecurseBlock block (addLayerToState state) break continue return throw)))))
 
 (define M_state_try_catch
@@ -128,11 +128,11 @@
 
 (define getCatchBlock
   (lambda (block)
-    (cdr (cdadr block))))
+    (cdadr block)))
 
 (define getCatchCode
   (lambda (block)
-    (cdr (getCatchBlock block))))
+    (cadr (getCatchBlock block))))
 
 (define getCatchVarName
   (lambda (block)
