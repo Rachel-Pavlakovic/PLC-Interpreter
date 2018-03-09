@@ -121,7 +121,7 @@
   (lambda (block state break continue return throw)
     (cond
       ((catchExists block) (call/cc (lambda (thrw) (parseRecurseBlock (car block) state break continue return (lambda (v s) (thrw (parseRecurseBlock (getCatchCode block) (addToState (getCatchVarName block) v s) break continue return throw)))))))
-      (else (call/cc (lambda (thrw2) (M_state_try (cadr block) state break continue return (lambda (v s) (thrw2 s)))))))))
+      (else (call/cc (lambda (thrw2) (parseRecurseBlock (car block) state break continue return (lambda (v s) (thrw2 s)))))))))
 
 ;(lambda (v s) (thrw (parseRecurseBlock (catch block) (addToState (catch variable) v s) break continue return throw)))
 ;(lambda (v s) (thrw s))
@@ -279,6 +279,7 @@
   (lambda (stmt)
     (cond
       ((null? stmt) #f)
+      ((null? (car stmt)) #f)
       ((eq? (getKey (getKey stmt)) 'catch) #t)
       (else (catchExists (rest stmt))))))
 
@@ -290,18 +291,16 @@
 (define finallyExists
   (lambda (stmt)
     (cond
-      ((null? stmt) #f)
-      ((null? (car stmt)) #f)
-      ((eq? (getKey (getKey stmt)) 'finally) #t)
-      (else (finallyExists (rest stmt))))))
+        ((null? stmt) #f)
+        ((null? (cdr stmt)) #f)
+        ((null? (cddr stmt)) #f)
+        ((null? (caddr stmt)) #f)
+        (else #t))))
 
 ;called only when we know there is going to be a finally block; returns the block of code that makes up the finally
 (define getFinally
   (lambda (stmt)
-    (cond
-      ((null? stmt) '())
-      ((eq? (getKey (getKey stmt)) 'finally) (car (cdr (getKey stmt))))
-      (else (getFinally (rest stmt))))))
+    (cadr (caddr stmt))))
 
 ;gets the name of the variable that is being thrown
 (define getVarName
