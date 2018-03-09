@@ -38,7 +38,7 @@
       ((eq? (getKey exp) 'break) (break (removeLayerFromState state)))
       ((eq? (getKey exp) 'continue) (continue state))
       ((eq? (getKey exp) 'try) (M_state_try (rest exp) state break continue return throw))
-      ((eq? (getKey exp) 'throw) (throw (M_value (cadr exp) state) state))
+      ((eq? (getKey exp) 'throw) (throw (M_value (firstOfRest exp) state) state))
       ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
       ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state) (addToState (getVar exp) 'NULL state))) ;declaration with assignment
       ((eq? (getKey exp) 'return) (return (M_value exp state))) 
@@ -52,7 +52,7 @@
   (lambda (exp state break continue return throw)
     (cond
       ((M_value_expr (getCondition exp) state) (M_state (getThen exp) state break continue return throw))
-      ((null? (cdddr exp)) state)
+      ((null? (restOfRestOfRest exp)) state)
       (else (M_state (getElse exp) state break continue return throw)))))
 
 ;M_state_while when the code has a 'while this function finds its condition and loopbody then recursively calls the loopbody until the condition is no longer true
@@ -74,7 +74,6 @@
       ((and (isDeclared var state) (eq? var expr)) state)
       ((isAssigned var state) (replaceInState var (M_value_expr expr state) state))
       ((isDeclared var state) (replaceInState var (M_value_expr expr state) state)))))
-;addToState var (M_value_expr expr (M_state_expr expr (removeFromState var state))) (M_state_expr expr (removeFromState var state)
 
 ;M_state_expr when M_state doesn't find the key to be if, while, return, etc. this checks the expr to see if it is a statement or value
 (define M_state_expr
@@ -110,33 +109,19 @@
   (lambda (block state break continue return throw)
      (removeLayerFromState (call/cc (lambda (cont)(parseRecurseBlock block (addLayerToState state) break cont return throw))))))
 
-;returns the state after a try block
+;returns the state after a try block (may or may not include catch and/or finally)
 (define M_state_try
   (lambda (block state break continue return throw)
     (cond
       ((finallyExists block) (parseRecurseBlock (getFinally block) (removeLayerFromState (M_state_try_catch block (addLayerToState state) break continue return throw))break continue return throw))
       (else (M_state_try_catch block (addLayerToState state) break continue return throw)))))
 
+;called by try, handles the case when there is a throw to a catch and when there is not
 (define M_state_try_catch
   (lambda (block state break continue return throw)
     (cond
-      ((catchExists block) (call/cc (lambda (thrw) (parseRecurseBlock (car block) state break continue return (lambda (v s) (thrw (parseRecurseBlock (getCatchCode block) (addToState (getCatchVarName block) v s) break continue return throw)))))))
-      (else (call/cc (lambda (thrw2) (parseRecurseBlock (car block) state break continue return (lambda (v s) (thrw2 s)))))))))
-
-;(lambda (v s) (thrw (parseRecurseBlock (catch block) (addToState (catch variable) v s) break continue return throw)))
-;(lambda (v s) (thrw s))
-
-(define getCatchBlock
-  (lambda (block)
-    (cdadr block)))
-
-(define getCatchCode
-  (lambda (block)
-    (cadr (getCatchBlock block))))
-
-(define getCatchVarName
-  (lambda (block)
-    (caar (getCatchBlock block))))
+      ((catchExists block) (call/cc (lambda (thrw) (parseRecurseBlock (first block) state break continue return (lambda (v s) (thrw (parseRecurseBlock (getCatchCode block) (addToState (getCatchVarName block) v s) break continue return throw)))))))
+      (else (call/cc (lambda (thrw2) (parseRecurseBlock (first block) state break continue return (lambda (v s) (thrw2 s)))))))))
 
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
@@ -245,70 +230,52 @@
       (else #f))))
 
 ;-------------- Helper Methods-----------------
-;When a return is found, a variable 'return is added to the state with the value of the return's expression
-;this function is used to check in parseRecurse if a return has been called and stop program execution
-;TAIL RECURSIVE
-(define isReturnPresent
-  (lambda (state)
-    (isReturnPresentMain state (lambda (v) v))))
-
-;parses through state to find variable 'return, returns true if present false otherwise
-;TAIL RECURSIVE
-(define isReturnPresentMain
-  (lambda (state return)
-    (cond
-      ((null? state) (return #f))
-      ((null? (cdr state)) (isReturnPresentHelper (getVarLis (car state)) return))
-      (else (or (isReturnPresentHelper (getVarLis (car state)) return) (isReturnPresentMain (cdr state) return))))))
-
-(define isReturnPresentHelper
-  (lambda (varLis return)
-    (cond
-      ((null? varLis) (return #f))
-      ((eq? 'return (first varLis))(return  #t))
-      (else (isReturnPresentHelper (rest varLis) return)))))
-
-;this function is called in the event isReturnPresent is true, in parseRecurse
-;returns the value of the return
-(define getReturnIfPresent
-  (lambda (state)
-    (getValueFromState 'return state)))
-
 ;checks to see if there is a catch statement that exists
 (define catchExists
   (lambda (stmt)
     (cond
       ((null? stmt) #f)
-      ((null? (car stmt)) #f)
-      ((eq? (getKey (getKey stmt)) 'catch) #t)
+      ((null? (first stmt)) #f)
+      ((eq? (firstOfFirst stmt) 'catch) #t)
       (else (catchExists (rest stmt))))))
 
 ;called only when we know that a catch statement exists, returns the block of code that makes up the catch block
+(define getCatchBlock
+  (lambda (block)
+    (restOfFirstOfRest block)))
 
+;called only when we know that a catch statement exists, returns the code that needs to be executed in the catch 
+(define getCatchCode
+  (lambda (block)
+    (firstOfRest (getCatchBlock block))))
 
+;called only when we know that a catch statement exists, returns the variable name that is being fed into the catch block 
+(define getCatchVarName
+  (lambda (block)
+    (firstOfFirst (getCatchBlock block))))
 
 ;checks to see if there is a finally after thr try or catch
 (define finallyExists
   (lambda (stmt)
     (cond
         ((null? stmt) #f)
-        ((null? (cdr stmt)) #f)
-        ((null? (cddr stmt)) #f)
-        ((null? (caddr stmt)) #f)
+        ((null? (rest stmt)) #f)
+        ((null? (restOfRest stmt)) #f)
+        ((null? (firstOfRestOfRest stmt)) #f)
         (else #t))))
 
 ;called only when we know there is going to be a finally block; returns the block of code that makes up the finally
 (define getFinally
   (lambda (stmt)
-    (cadr (caddr stmt))))
+    (firstOfRest (firstOfRestOfRest stmt))))
 
 ;gets the name of the variable that is being thrown
 (define getVarName
   (lambda (stmt)
     (cond
       ((null? stmt) '())
-      ((eq? (getKey stmt) 'catch) (cadr stmt))
-      (else (getVarName (cdr stmt))))))
+      ((eq? (getKey stmt) 'catch) (firstOfRest stmt))
+      (else (getVarName (rest stmt))))))
 
 ;--Error Checking Helpers--
 
@@ -319,13 +286,15 @@
       ((isDeclaredMain var state) #t)
       (else (error "Undeclared variable")))))
 
+;Helper method for determining whether of not a variable has been declared
 (define isDeclaredMain
   (lambda (var state)
     (cond
       ((null? state) #f)
-      ((null? (cdr state)) (isDeclaredHelper var (getVarLis (car state))))
-      (else (or (isDeclaredHelper var (getVarLis (car state))) (isDeclaredMain var (cdr state)))))))
+      ((null? (rest state)) (isDeclaredHelper var (getVarLis (first state))))
+      (else (or (isDeclaredHelper var (getVarLis (first state))) (isDeclaredMain var (rest state)))))))
 
+;Helper method for determining whether of not a variable has been declared
 (define isDeclaredHelper
   (lambda (var varLis)
     (cond
@@ -347,12 +316,13 @@
       ((isAssignedMain var state) #t)
       (else (error "Unassigned Variable")))))
 
+;helper for the isAssigned method
 (define isAssignedMain
   (lambda (var state)
     (cond
       ((null? state) #f)
-      ((null? (cdr state)) (isAssignedHelper var (getVarLis (car state)) (getValLis (car state))))
-      (else (or (isAssignedHelper var (getVarLis (car state)) (getValLis (car state))) (isAssignedMain var (cdr state)))))))
+      ((null? (rest state)) (isAssignedHelper var (getVarLis (first state)) (getValLis (first state))))
+      (else (or (isAssignedHelper var (getVarLis (first state)) (getValLis (first state))) (isAssignedMain var (rest state)))))))
 
 ;parses through state to find input variable if it is present
 (define isAssignedHelper
@@ -469,6 +439,15 @@
 ;functions as cdar
 (define restOfFirst cdar)
 
+;functions as caddr
+(define firstOfRestOfRest caddr)
+
+;fucntions as cdadr
+(define restOfFirstOfRest cdadr)
+
+;functions as cdddr
+(define restOfRestOfRest cdddr)
+
 ;gets the condition from an if statement or while loop
 (define getCondition cadr)
 
@@ -479,7 +458,7 @@
 (define getElse
   (lambda (line)
     (cond
-      ((null? (cdddr line)) '())
+      ((null? (restOfRestOfRest line)) '())
       (else (cadddr line)))))
 
 ;gets the body of a while loop statement - what happens while the loop condition is true
@@ -502,4 +481,4 @@
 ;Returns the first layer fo the state to check
 (define getNextLayer
   (lambda (state)
-    (car state))) 
+    (first state))) 
