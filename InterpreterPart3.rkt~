@@ -44,9 +44,6 @@
       ((eq? (getKey exp) 'return) (return (M_value exp state))) 
       ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state)) ;assignment without built in declaration
       ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue return throw))
-      ((eq? (getKey exp) 'function)  (M_state_func exp state break continue return throw))
-      ((eq? (getKey exp) 'funcall) ;do something here
-       )
       ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
@@ -125,13 +122,6 @@
     (cond
       ((catchExists block) (call/cc (lambda (thrw) (parseRecurseBlock (first block) state break continue return (lambda (v s) (thrw (parseRecurseBlock (getCatchCode block) (addToState (getCatchVarName block) v s) break continue return throw)))))))
       (else (call/cc (lambda (thrw2) (parseRecurseBlock (first block) state break continue return (lambda (v s) (thrw2 s)))))))))
-
-;if the function is the main funtion the block of code is run, otherwise the function information is stored for later use
-(define M_state_func
-  (lambda (func state break continue return throw)
-    (if (eq? (cadr func) 'main)
-        (M_state_begin (cadddr func) state break continue return throw)
-        (addFunctionToState(func state)))))
 
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
