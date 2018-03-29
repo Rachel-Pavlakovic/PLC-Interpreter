@@ -3,7 +3,7 @@
 ; - Rachel Pavlakovic
 ; - Shannon Stork
 
-(require "simpleParser.scm")
+(require "functionParser.scm")
 
 ;Interpret takes a filename and runs the code in the file
 (define interpret
