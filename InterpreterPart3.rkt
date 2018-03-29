@@ -45,8 +45,7 @@
       ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state)) ;assignment without built in declaration
       ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue return throw))
       ((eq? (getKey exp) 'function)  (M_state_func exp state break continue return throw))
-      ((eq? (getKey exp) 'funcall) ;do something here
-       )
+      ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw))
       ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
@@ -132,6 +131,12 @@
     (if (eq? (cadr func) 'main)
         (M_state_begin (cadddr func) state break continue return throw)
         (addFunctionToState(func state)))))
+
+;assigns values to the parameters and evaluates the function call
+(define M_state_funcall
+  (lambda (funcall state break continue return throw)
+    (M_state_begin (getFuncBody (cadr funcall) state) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) state) break continue return throw)))
+
 
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
@@ -240,6 +245,17 @@
       (else #f))))
 
 ;-------------- Helper Methods-----------------
+
+;assigns values to the parameters for a function call
+(define assignValuesToParameters
+  (lambda (paramLis valLis state)
+    (cond
+      ((and (null? paramLis) (not (null? valLis))) (error "Arity mismatch: Too many values passed into function call"))
+      ((and (null? valLis) (not (null? paramLis))) (error "Arity mismatch: Not enough values passed into function call"))
+      ((and (null? paramLis) (null? valLis)) state)
+      (else (assignValueToParameters (cdr paramLis) (cdr valLis) (replaceInState (car paramLis) (car valLis) state))))))
+
+
 ;checks to see if there is a catch statement that exists
 (define catchExists
   (lambda (stmt)
