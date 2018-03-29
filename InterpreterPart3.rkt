@@ -362,6 +362,53 @@
 
 ;state is stored as a list with two sublists. The first sublist is the variable names, the second is the corresponding variable values (NULL if the variable is unassigned)
 
+;adds a function and its closure to the state
+(define addFunctionToState
+  (lambda (functionCode state)
+    (addToState (cadr functionCode) (getClosure functionCode state) state)))
+
+;returns the closure in the form '((formal parameter list) (function body) (new state))
+(define getClosure
+  (lambda (functionCode state)
+    (list (caddr functionCode) (cadddr functionCode) (getStateFromFunc functionCode state))))
+
+;makes a new state by adding the function closure to the top layer of the state
+(define getStateFromFunc
+  (lambda (functionCode state)
+    ;uncomment the following line to add things from the body if needed
+    ;(addBody (cadddr functionCode) (addParams (caddr functionCode) state))))
+    (addParams (caddr functionCode) state)))
+
+;adds the formal parammeters to the state as 'NULL
+(define addParams
+  (lambda (paramList state)
+    (cond
+      ((null? paramList) state)
+      (else (addParams (cdr paramList) (addToState (car paramList) 'NULL state))))))
+
+;this is probably unnecessary, but keeping it for now
+;(define addBody
+  ;(lambda (body state)
+    ;(cond
+      ;((null? (car body)) state)
+      ;((eq? (getKey (car body)) 'var) (addBody (cdr body) (addToState (getVar body) 'NULL)))
+      ;(else (addBody (cdr body) state)))))
+
+;gets the formal parameter list
+(define getFuncParams
+  (lambda (funcName state)
+    (car (getValueFromState funcName state))))
+
+;gets the function body
+(define getFuncBody
+  (lambda (funcName state)
+    (cadr (getValueFromState funcName state))))
+
+;gets the new state with the parameters added
+(define getFuncState
+  (lambda (funcName state)
+    (caddr (getValueFromState funcName state))))
+     
 ;adds a new layer to the state
 (define addLayerToState
   (lambda (state)
@@ -440,7 +487,6 @@
       ((eq? (first (getVarLis state)) var) (list (cons var (rest (getVarLis state))) (cons val (rest (getValLis state)))))
       (else (list (cons (first (getVarLis state)) (first (replaceInStateHelper var val (list (restOfFirst state) (cdadr state)))))
                   (cons (first (getValLis state)) (firstOfRest (replaceInStateHelper var val (list (restOfFirst state) (cdadr state))))))))))
-
 ;-------------- Abstractions-----------------
 
 ;get operator for math expressions and comparisons
