@@ -44,8 +44,6 @@
       ((eq? (getKey exp) 'return) (return (M_value exp state))) 
       ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state)) ;assignment without built in declaration
       ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue return throw))
-      ((eq? (getKey exp) 'function)  (M_state_func exp state break continue return throw))
-      ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw))
       ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
@@ -124,19 +122,6 @@
     (cond
       ((catchExists block) (call/cc (lambda (thrw) (parseRecurseBlock (first block) state break continue return (lambda (v s) (thrw (parseRecurseBlock (getCatchCode block) (addToState (getCatchVarName block) v s) break continue return throw)))))))
       (else (call/cc (lambda (thrw2) (parseRecurseBlock (first block) state break continue return (lambda (v s) (thrw2 s)))))))))
-
-;if the function is the main funtion the block of code is run, otherwise the function information is stored for later use
-(define M_state_func
-  (lambda (func state break continue return throw)
-    (if (eq? (cadr func) 'main)
-        (M_state_begin (cadddr func) state break continue return throw)
-        (addFunctionToState(func state)))))
-
-;assigns values to the parameters and evaluates the function call
-(define M_state_funcall
-  (lambda (funcall state break continue return throw)
-    (M_state_begin (getFuncBody (cadr funcall) state) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) state) break continue return throw)))
-
 
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
@@ -245,17 +230,6 @@
       (else #f))))
 
 ;-------------- Helper Methods-----------------
-
-;assigns values to the parameters for a function call
-(define assignValuesToParameters
-  (lambda (paramLis valLis state)
-    (cond
-      ((and (null? paramLis) (not (null? valLis))) (error "Arity mismatch: Too many values passed into function call"))
-      ((and (null? valLis) (not (null? paramLis))) (error "Arity mismatch: Not enough values passed into function call"))
-      ((and (null? paramLis) (null? valLis)) state)
-      (else (assignValueToParameters (cdr paramLis) (cdr valLis) (replaceInState (car paramLis) (car valLis) state))))))
-
-
 ;checks to see if there is a catch statement that exists
 (define catchExists
   (lambda (stmt)
@@ -362,53 +336,6 @@
 
 ;state is stored as a list with two sublists. The first sublist is the variable names, the second is the corresponding variable values (NULL if the variable is unassigned)
 
-;adds a function and its closure to the state
-(define addFunctionToState
-  (lambda (functionCode state)
-    (addToState (cadr functionCode) (getClosure functionCode state) state)))
-
-;returns the closure in the form '((formal parameter list) (function body) (new state))
-(define getClosure
-  (lambda (functionCode state)
-    (list (caddr functionCode) (cadddr functionCode) (getStateFromFunc functionCode state))))
-
-;makes a new state by adding the function closure to the top layer of the state
-(define getStateFromFunc
-  (lambda (functionCode state)
-    ;uncomment the following line to add things from the body if needed
-    ;(addBody (cadddr functionCode) (addParams (caddr functionCode) state))))
-    (addParams (caddr functionCode) state)))
-
-;adds the formal parammeters to the state as 'NULL
-(define addParams
-  (lambda (paramList state)
-    (cond
-      ((null? paramList) state)
-      (else (addParams (cdr paramList) (addToState (car paramList) 'NULL state))))))
-
-;this is probably unnecessary, but keeping it for now
-;(define addBody
-  ;(lambda (body state)
-    ;(cond
-      ;((null? (car body)) state)
-      ;((eq? (getKey (car body)) 'var) (addBody (cdr body) (addToState (getVar body) 'NULL)))
-      ;(else (addBody (cdr body) state)))))
-
-;gets the formal parameter list
-(define getFuncParams
-  (lambda (funcName state)
-    (car (getValueFromState funcName state))))
-
-;gets the function body
-(define getFuncBody
-  (lambda (funcName state)
-    (cadr (getValueFromState funcName state))))
-
-;gets the new state with the parameters added
-(define getFuncState
-  (lambda (funcName state)
-    (caddr (getValueFromState funcName state))))
-     
 ;adds a new layer to the state
 (define addLayerToState
   (lambda (state)
@@ -487,6 +414,7 @@
       ((eq? (first (getVarLis state)) var) (list (cons var (rest (getVarLis state))) (cons val (rest (getValLis state)))))
       (else (list (cons (first (getVarLis state)) (first (replaceInStateHelper var val (list (restOfFirst state) (cdadr state)))))
                   (cons (first (getValLis state)) (firstOfRest (replaceInStateHelper var val (list (restOfFirst state) (cdadr state))))))))))
+
 ;-------------- Abstractions-----------------
 
 ;get operator for math expressions and comparisons
