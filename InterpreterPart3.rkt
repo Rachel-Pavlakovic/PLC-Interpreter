@@ -135,8 +135,16 @@
 ;assigns values to the parameters and evaluates the function call
 (define M_state_funcall
   (lambda (funcall state break continue return throw)
-    (M_state_begin (getFuncBody (cadr funcall) state) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) state break continue return throw) break continue return throw)))
+    (call/cc
+     (lambda (funcReturn)
+       (M_value_func (first (getFuncBody (cadr funcall) state)) (rest (getFuncBody (cadr funcall) state)) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) state break continue return throw) break continue funcReturn throw)))))
 
+(define M_value_func
+  (lambda (firstPart restPart state break continue return throw)
+    (cond
+      ((null? firstPart) (error "hitting this place"))
+      ((null? restPart) (M_state firstPart state break continue return throw))
+      (else (M_value_func (first restPart) (rest restPart) (M_state firstPart state break continue return throw) break continue return throw)))))
 
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
