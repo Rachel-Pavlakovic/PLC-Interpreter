@@ -145,6 +145,8 @@
    (lambda (exp state break continue return throw)
     (cond
       ((number? exp) exp)
+      ((eq? exp 'true) #t)
+      ((eq? exp 'false) #f)
       ((not (pair? exp)) (getValueFromState exp state))
       ((eq? (getKey exp) 'var) (M_value_var exp state break continue return throw))
       ((eq? (getKey exp) 'return) (M_value_return exp state break continue return throw))
