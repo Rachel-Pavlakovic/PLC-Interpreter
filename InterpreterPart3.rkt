@@ -139,13 +139,6 @@
      (lambda (funcReturn)
        (M_value_func (first (getFuncBody (cadr funcall) state)) (rest (getFuncBody (cadr funcall) state)) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) state break continue return throw) break continue funcReturn throw)))))
 
-(define M_value_func
-  (lambda (firstPart restPart state break continue return throw)
-    (cond
-      ((null? firstPart) (error "hitting this place"))
-      ((null? restPart) (M_state firstPart state break continue return throw))
-      (else (M_value_func (first restPart) (rest restPart) (M_state firstPart state break continue return throw) break continue return throw)))))
-
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
 (define M_value
@@ -243,6 +236,14 @@
       ((eq? '== (operator lis)) (eq? (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
       ((eq? '!= (operator lis)) (not (eq? (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw))))
       (else (M_value_expr lis state break continue return throw)))))
+
+;gets the value of a function call
+(define M_value_func
+  (lambda (firstPart restPart state break continue return throw)
+    (cond
+      ((null? firstPart) (error "hitting this place"))
+      ((null? restPart) (M_state firstPart state break continue return throw))
+      (else (M_value_func (first restPart) (rest restPart) (M_state firstPart state break continue return throw) break continue return throw)))))
 
 ;--------------M_bool-----------------
 ;M_bool checks if bool is true or false, returns true if boolean or false otherwise
