@@ -38,7 +38,7 @@
       ((eq? (getKey exp) 'break) (break (removeLayerFromState state)))
       ((eq? (getKey exp) 'continue) (continue state))
       ((eq? (getKey exp) 'try) (M_state_try (rest exp) state break continue return throw))
-      ((eq? (getKey exp) 'throw) (throw (M_value (firstOfRest exp) state) state))
+      ((eq? (getKey exp) 'throw) (throw (M_value (firstOfRest exp) state break continue return throw) state))
       ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
       ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state break continue return throw) (addToState (getVar exp) 'NULL state) break continue return throw)) ;declaration with assignment
       ((eq? (getKey exp) 'return) (return (M_value exp state break continue return throw))) 
@@ -195,7 +195,7 @@
       ((and (not (pair? (rest expr))) (eq? (first expr) 'false)) #f)
       ((not (pair? (rest expr))) (M_value_var (first expr) state break continue return throw))
       ((or (eq? (operator expr) '+)(eq? (operator expr) '-)(eq? (operator expr) '*)(eq? (operator expr) '/)(eq? (operator expr) '%)) (M_value_int expr state break continue return throw))
-      ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state))
+      ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state break continue return throw))
       ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state break continue return throw))
       ((eq? (operator expr) 'funcall) (M_state_funcall expr state break continue return throw))
       (else (error badop)))))
@@ -236,7 +236,7 @@
     (cond
       ((number? lis) lis)
       ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state break continue return throw))
-      ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state break continue return throw) (M_value_comp (operand2 lis) state )))
+      ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
       ((eq? '< (operator lis)) (< (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
       ((eq? '>= (operator lis)) (>= (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
       ((eq? '<= (operator lis)) (<= (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
