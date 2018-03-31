@@ -38,7 +38,7 @@
       ((eq? (getKey exp) 'break) (break (removeLayerFromState state)))
       ((eq? (getKey exp) 'continue) (continue state))
       ((eq? (getKey exp) 'try) (M_state_try (rest exp) state break continue return throw))
-      ((eq? (getKey exp) 'throw) (throw (M_value (firstOfRest exp) state) state))
+      ((eq? (getKey exp) 'throw) (throw (M_value (firstOfRest exp) state break continue return throw) state))
       ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
       ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state break continue return throw) (addToState (getVar exp) 'NULL state) break continue return throw)) ;declaration with assignment
       ((eq? (getKey exp) 'return) (return (M_value exp state break continue return throw))) 
@@ -135,8 +135,9 @@
 ;assigns values to the parameters and evaluates the function call
 (define M_state_funcall
   (lambda (funcall state break continue return throw)
-    (M_state_begin (getFuncBody (cadr funcall) state) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) state) break continue return throw)))
-
+    (call/cc
+     (lambda (funcReturn)
+       (M_value_func (first (getFuncBody (cadr funcall) state)) (rest (getFuncBody (cadr funcall) state)) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) state break continue return throw) break continue funcReturn throw)))))
 
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
@@ -187,7 +188,7 @@
       ((and (not (pair? (rest expr))) (eq? (first expr) 'false)) #f)
       ((not (pair? (rest expr))) (M_value_var (first expr) state break continue return throw))
       ((or (eq? (operator expr) '+)(eq? (operator expr) '-)(eq? (operator expr) '*)(eq? (operator expr) '/)(eq? (operator expr) '%)) (M_value_int expr state break continue return throw))
-      ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state))
+      ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state break continue return throw))
       ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state break continue return throw))
       ((eq? (operator expr) 'funcall) (M_state_funcall expr state break continue return throw))
       (else (error badop)))))
@@ -236,6 +237,14 @@
       ((eq? '!= (operator lis)) (not (eq? (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw))))
       (else (M_value_expr lis state break continue return throw)))))
 
+;gets the value of a function call
+(define M_value_func
+  (lambda (firstPart restPart state break continue return throw)
+    (cond
+      ((null? firstPart) (error "hitting this place"))
+      ((null? restPart) (M_state firstPart state break continue return throw))
+      (else (M_value_func (first restPart) (rest restPart) (M_state firstPart state break continue return throw) break continue return throw)))))
+
 ;--------------M_bool-----------------
 ;M_bool checks if bool is true or false, returns true if boolean or false otherwise
 (define M_bool
@@ -249,12 +258,12 @@
 
 ;assigns values to the parameters for a function call
 (define assignValuesToParameters
-  (lambda (paramLis valLis state)
+  (lambda (paramLis valLis state break continue return throw)
     (cond
       ((and (null? paramLis) (not (null? valLis))) (error "Arity mismatch: Too many values passed into function call"))
       ((and (null? valLis) (not (null? paramLis))) (error "Arity mismatch: Not enough values passed into function call"))
       ((and (null? paramLis) (null? valLis)) state)
-      (else (assignValuesToParameters (cdr paramLis) (cdr valLis) (replaceInState (car paramLis) (car valLis) state))))))
+      (else (assignValuesToParameters (cdr paramLis) (cdr valLis) (addToState (car paramLis) (M_value (car valLis) state break continue return throw) state) break continue return throw)))))
 
 
 ;checks to see if there is a catch statement that exists
