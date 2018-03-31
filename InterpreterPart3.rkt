@@ -135,7 +135,7 @@
 ;assigns values to the parameters and evaluates the function call
 (define M_state_funcall
   (lambda (funcall state break continue return throw)
-    (M_state_begin (getFuncBody (cadr funcall) state) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) state) break continue return throw)))
+    (M_state_begin (getFuncBody (cadr funcall) state) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) state break continue return throw) break continue return throw)))
 
 
 ;---------- M_value-----------
@@ -228,7 +228,7 @@
     (cond
       ((number? lis) lis)
       ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state break continue return throw))
-      ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
+      ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state break continue return throw) (M_value_comp (operand2 lis) state )))
       ((eq? '< (operator lis)) (< (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
       ((eq? '>= (operator lis)) (>= (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
       ((eq? '<= (operator lis)) (<= (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
@@ -249,12 +249,12 @@
 
 ;assigns values to the parameters for a function call
 (define assignValuesToParameters
-  (lambda (paramLis valLis state)
+  (lambda (paramLis valLis state break continue return throw)
     (cond
       ((and (null? paramLis) (not (null? valLis))) (error "Arity mismatch: Too many values passed into function call"))
       ((and (null? valLis) (not (null? paramLis))) (error "Arity mismatch: Not enough values passed into function call"))
       ((and (null? paramLis) (null? valLis)) state)
-      (else (assignValuesToParameters (cdr paramLis) (cdr valLis) (replaceInState (car paramLis) (car valLis) state))))))
+      (else (assignValuesToParameters (cdr paramLis) (cdr valLis) (addToState (car paramLis) (M_value (car valLis) state break continue return throw) state) break continue return throw)))))
 
 
 ;checks to see if there is a catch statement that exists
