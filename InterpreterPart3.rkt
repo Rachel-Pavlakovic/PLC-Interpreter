@@ -40,9 +40,9 @@
       ((eq? (getKey exp) 'try) (M_state_try (rest exp) state break continue return throw))
       ((eq? (getKey exp) 'throw) (throw (M_value (firstOfRest exp) state) state))
       ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
-      ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state) (addToState (getVar exp) 'NULL state))) ;declaration with assignment
-      ((eq? (getKey exp) 'return) (return (M_value exp state))) 
-      ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state)) ;assignment without built in declaration
+      ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state break continue return throw) (addToState (getVar exp) 'NULL state) break continue return throw)) ;declaration with assignment
+      ((eq? (getKey exp) 'return) (return (M_value exp state break continue return throw))) 
+      ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state break continue return throw)) ;assignment without built in declaration
       ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue return throw))
       ((eq? (getKey exp) 'function)  (M_state_func exp state break continue return throw))
       ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw))
@@ -53,7 +53,7 @@
 (define M_state_if
   (lambda (exp state break continue return throw)
     (cond
-      ((M_value_expr (getCondition exp) state) (M_state (getThen exp) state break continue return throw))
+      ((M_value_expr (getCondition exp) state break continue return throw) (M_state (getThen exp) state break continue return throw))
       ((null? (restOfRestOfRest exp)) state)
       (else (M_state (getElse exp) state break continue return throw)))))
 
@@ -61,21 +61,21 @@
 (define M_state_while
   (lambda (exp state break continue return throw)
     (cond
-      ((M_value_expr (getCondition exp) state) (M_state_while exp (call/cc (lambda (cont) (M_state (getLoopbody exp) state break cont return throw))) break continue return throw))
+      ((M_value_expr (getCondition exp) state break continue return throw) (M_state_while exp (call/cc (lambda (cont) (M_state (getLoopbody exp) state break cont return throw))) break continue return throw))
       (else state))))
 
 ;M_state_dec&assign when a variable is declared and assigned in the same line of code, this adds both the variable and value to the state
 (define M_state_dec&assign
-  (lambda (var expr state)
-    (replaceInState var (M_value_expr expr (M_state_expr expr state)) (M_state_expr expr state))))
+  (lambda (var expr state break continue return throw)
+    (replaceInState var (M_value_expr expr (M_state_expr expr state) break continue return throw) (M_state_expr expr state))))
 
 ;M_state_assign when a variable is already declared, and its value is being redefined
 (define M_state_assign
-  (lambda (var expr state)
+  (lambda (var expr state break continue return throw)
     (cond
       ((and (isDeclared var state) (eq? var expr)) state)
-      ((isAssigned var state) (replaceInState var (M_value_expr expr state) state))
-      ((isDeclared var state) (replaceInState var (M_value_expr expr state) state)))))
+      ((isAssigned var state) (replaceInState var (M_value_expr expr state break continue return throw) state))
+      ((isDeclared var state) (replaceInState var (M_value_expr expr state break continue return throw) state)))))
 
 ;M_state_expr when M_state doesn't find the key to be if, while, return, etc. this checks the expr to see if it is a statement or value
 (define M_state_expr
@@ -130,7 +130,7 @@
   (lambda (func state break continue return throw)
     (if (eq? (cadr func) 'main)
         (M_state_begin (cadddr func) state break continue return throw)
-        (addFunctionToState(func state)))))
+        (addFunctionToState func state))))
 
 ;assigns values to the parameters and evaluates the function call
 (define M_state_funcall
@@ -141,99 +141,100 @@
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
 (define M_value
-   (lambda (exp state)
+   (lambda (exp state break continue return throw)
     (cond
       ((number? exp) exp)
       ((not (pair? exp)) (getValueFromState exp state))
-      ((eq? (getKey exp) 'var) (M_value_var exp state))
-      ((eq? (getKey exp) 'return) (M_value_return exp state))
-      ((eq? (getKey exp) '=) (M_value_assign exp state)) 
-      ((member (getKey exp) (expressions)) (M_value_expr exp state )))))
+      ((eq? (getKey exp) 'var) (M_value_var exp state break continue return throw))
+      ((eq? (getKey exp) 'return) (M_value_return exp state break continue return throw))
+      ((eq? (getKey exp) '=) (M_value_assign exp state break continue return throw)) 
+      ((member (getKey exp) (expressions)) (M_value_expr exp state break continue return throw)))))
 
 ;returns the value of var
 (define M_value_var
-  (lambda (var state)
+  (lambda (var state break continue return throw)
     (getValueFromState var state)))
 
 ;returns value of expr
 (define M_value_assign
-  (lambda (expr state)
+  (lambda (expr state break continue return throw)
     (cond
       ((null? expr))
       ((number? (getExpr expr)) (getExpr expr))
       ((or (eq? (getExpr expr) "true") (eq? (getExpr expr) "false")) (getExpr expr))
-      ((pair? (getExpr expr)) (M_value_expr (getExpr expr) state))
+      ((pair? (getExpr expr)) (M_value_expr (getExpr expr) state break continue return throw))
       (else (getValueFromState (getExpr expr) state)))))
 
 ;takes value of expr and converts #t and #f to true and false
 (define M_value_return
-  (lambda (expr state)
+  (lambda (expr state break continue return throw)
     (cond
       ((null? expr) expr)
-      ((eq? (M_value_expr (operand1 expr) state) #t) 'true)
-      ((eq? (M_value_expr (operand1 expr) state) #f) 'false)
-      (else (M_value_expr (operand1 expr) state)))))
+      ((eq? (M_value_expr (operand1 expr) state break continue return throw) #t) 'true)
+      ((eq? (M_value_expr (operand1 expr) state break continue return throw) #f) 'false)
+      (else (M_value_expr (operand1 expr) state break continue return throw)))))
 
 ;determines if expr is a single value, variable or an operation. if so what kind of operation. this returns the value of the expr
 (define M_value_expr
-  (lambda (expr state)
+  (lambda (expr state break continue return throw)
     (cond
       ((null? expr) expr)
       ((number? expr) expr)
-      ((M_bool expr) (M_value_bool expr state))
+      ((M_bool expr) (M_value_bool expr state break continue return throw))
       ((not (list? expr)) (getValueFromState expr state))
       ((and (not (pair? (rest expr))) (number? (first expr))) (first expr))
       ((and (not (pair? (rest expr))) (eq? (first expr) 'true)) #t)
       ((and (not (pair? (rest expr))) (eq? (first expr) 'false)) #f)
-      ((not (pair? (rest expr))) (M_value_var (first expr) state))
-      ((or (eq? (operator expr) '+)(eq? (operator expr) '-)(eq? (operator expr) '*)(eq? (operator expr) '/)(eq? (operator expr) '%)) (M_value_int expr state))
+      ((not (pair? (rest expr))) (M_value_var (first expr) state break continue return throw))
+      ((or (eq? (operator expr) '+)(eq? (operator expr) '-)(eq? (operator expr) '*)(eq? (operator expr) '/)(eq? (operator expr) '%)) (M_value_int expr state break continue return throw))
       ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state))
-      ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state))
+      ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state break continue return throw))
+      ((eq? (operator expr) 'funcall) (M_state_funcall expr state break continue return throw))
       (else (error badop)))))
 
 ;takes an expr that starts with a math symbol and recursively evaluates all of the operations in the expression, returns final value of math expression
 (define M_value_int
-  (lambda (lis state)
+  (lambda (lis state break continue return throw)
     (cond
       ((number? lis) lis)
-      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state))
-      ((eq? '+ (operator lis)) (+ (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
-      ((and (eq? '- (operator lis)) (not (pair? (restOfRest lis)))) (- (M_value_int (operand1 lis) state)))
-      ((and (eq? '- (operator lis)) (pair? (restOfRest lis))) (- (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
-      ((eq? '* (operator lis)) (* (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
-      ((eq? '/ (operator lis)) (quotient (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
-      ((eq? '% (operator lis)) (remainder (M_value_int (operand1 lis) state) (M_value_int (operand2 lis) state)))
-      (else (M_value_expr lis state)))))
+      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state break continue return throw))
+      ((eq? '+ (operator lis)) (+ (M_value_int (operand1 lis) state break continue return throw) (M_value_int (operand2 lis) state break continue return throw)))
+      ((and (eq? '- (operator lis)) (not (pair? (restOfRest lis)))) (- (M_value_int (operand1 lis) state break continue return throw)))
+      ((and (eq? '- (operator lis)) (pair? (restOfRest lis))) (- (M_value_int (operand1 lis) state break continue return throw) (M_value_int (operand2 lis) state break continue return throw)))
+      ((eq? '* (operator lis)) (* (M_value_int (operand1 lis) state break continue return throw) (M_value_int (operand2 lis) state break continue return throw)))
+      ((eq? '/ (operator lis)) (quotient (M_value_int (operand1 lis) state break continue return throw) (M_value_int (operand2 lis) state break continue return throw)))
+      ((eq? '% (operator lis)) (remainder (M_value_int (operand1 lis) state break continue return throw) (M_value_int (operand2 lis) state break continue return throw)))
+      (else (M_value_expr lis state break continue return throw)))))
 
 ;takes an expr that starts with a logic symbol and recursively evaluates all of the operations in the expression. if an operator
 ;is not in the list the code calls M_value_expr in order to determine value of different internal operations, returns final boolean
 (define M_value_bool
-  (lambda (lis state)
+  (lambda (lis state break continue return throw)
     (cond
       ((eq? lis 'true) #t)
       ((eq? lis 'false) #f)
       ((eq? lis #t) #t)
       ((eq? lis #f) #f)
-      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state))
-      ((eq? '&& (operator lis)) (and (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
-      ((eq? '|| (operator lis)) (or (M_value_bool (operand1 lis) state) (M_value_bool (operand2 lis) state)))
-      ((eq? '! (operator lis)) (not (M_value_bool (operand1 lis) state)))
-      (else (M_value_expr lis state)))))
+      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state break continue return throw))
+      ((eq? '&& (operator lis)) (and (M_value_bool (operand1 lis) state break continue return throw) (M_value_bool (operand2 lis) state break continue return throw)))
+      ((eq? '|| (operator lis)) (or (M_value_bool (operand1 lis) state break continue return throw) (M_value_bool (operand2 lis) state break continue return throw)))
+      ((eq? '! (operator lis)) (not (M_value_bool (operand1 lis) state break continue return throw)))
+      (else (M_value_expr lis state break continue return throw)))))
 
 ;takes an expr that starts with a comapison symbol and recursively evaluates all of the operations in the expression. if an operator
 ;is not in the list the code calls M_value_expr in order to determine the value of different internal operations, returns final boolean
 (define M_value_comp
-  (lambda (lis state)
+  (lambda (lis state break continue return throw)
     (cond
       ((number? lis) lis)
-      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state))
-      ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state) (M_value_comp (operand2 lis) state)))
-      ((eq? '< (operator lis)) (< (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
-      ((eq? '>= (operator lis)) (>= (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
-      ((eq? '<= (operator lis)) (<= (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
-      ((eq? '== (operator lis)) (eq? (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state)))
-      ((eq? '!= (operator lis)) (not (eq? (M_value_comp (operand1 lis) state) (M_value_comp (operand2 lis) state))))
-      (else (M_value_expr lis state)))))
+      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state break continue return throw))
+      ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
+      ((eq? '< (operator lis)) (< (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
+      ((eq? '>= (operator lis)) (>= (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
+      ((eq? '<= (operator lis)) (<= (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
+      ((eq? '== (operator lis)) (eq? (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
+      ((eq? '!= (operator lis)) (not (eq? (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw))))
+      (else (M_value_expr lis state break continue return throw)))))
 
 ;--------------M_bool-----------------
 ;M_bool checks if bool is true or false, returns true if boolean or false otherwise
@@ -253,7 +254,7 @@
       ((and (null? paramLis) (not (null? valLis))) (error "Arity mismatch: Too many values passed into function call"))
       ((and (null? valLis) (not (null? paramLis))) (error "Arity mismatch: Not enough values passed into function call"))
       ((and (null? paramLis) (null? valLis)) state)
-      (else (assignValueToParameters (cdr paramLis) (cdr valLis) (replaceInState (car paramLis) (car valLis) state))))))
+      (else (assignValuesToParameters (cdr paramLis) (cdr valLis) (replaceInState (car paramLis) (car valLis) state))))))
 
 
 ;checks to see if there is a catch statement that exists
