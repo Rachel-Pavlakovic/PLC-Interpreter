@@ -133,12 +133,14 @@
         (addFunctionToState func state))))
 
 ;assigns values to the parameters and evaluates the function call
+
+; modify (addLayerToState state) to only take the number of layers that are availible to the function plus the new layer
 (define M_state_funcall
   (lambda (funcall state break continue return throw)
     (call/cc
      (lambda (funcReturn)
-       (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) (addLayerToState state) break continue return throw) break continue funcReturn throw))))))
-
+       (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state) (addLayerToState (stripLayers (getFuncLayers (cadr funcall) state) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) state break continue return throw))) break continue return throw))))))
+  
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
 (define M_value
@@ -375,7 +377,23 @@
 ;returns the closure in the form '((formal parameter list) (function body) (new state))
 (define getClosure
   (lambda (functionCode state)
-    (list (caddr functionCode) (cadddr functionCode) (getStateFromFunc functionCode state))))
+    (list (caddr functionCode) (cadddr functionCode) (getNumLayers state))))
+
+(define getNumLayers
+  (lambda (state)
+    (cond
+     ((null? (cdr state)) 1)
+     (else (+ 1 (getNumLayers (cdr state)))))))
+
+(define stripLayers
+  (lambda (num state)
+    (stripLayersHelper (- (getNumLayers state) num) state)))
+
+(define stripLayersHelper
+  (lambda (num state)
+    (cond
+      ((eq? 0 num) state)
+      (else (stripLayersHelper (- 1 num) (cdr state))))))
 
 ;makes a new state by adding the function closure to the top layer of the state
 (define getStateFromFunc
@@ -410,7 +428,7 @@
     (cadr (getValueFromState funcName state))))
 
 ;gets the new state with the parameters added
-(define getFuncState
+(define getFuncLayers
   (lambda (funcName state)
     (caddr (getValueFromState funcName state))))
      
