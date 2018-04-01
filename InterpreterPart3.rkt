@@ -452,6 +452,11 @@
 (define getFuncLayers
   (lambda (funcName state)
     (caddr (getValueFromState funcName state))))
+
+;Returns the first layer fo the state to check
+(define getNextLayer
+  (lambda (state)
+    (first state)))
      
 ;adds a new layer to the state
 (define addLayerToState
@@ -595,8 +600,3 @@
 (define expressions
   (lambda ()
     '(+ - * / % < > <= >= == != || && !)))
-    
-;Returns the first layer fo the state to check
-(define getNextLayer
-  (lambda (state)
-    (first state)))
