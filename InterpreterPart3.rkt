@@ -137,8 +137,8 @@
   (lambda (funcall state break continue return throw)
     (call/cc
      (lambda (funcState)
-       (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
-                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (stripLayers (getFuncLayers (cadr funcall) state) state) state break continue return throw) break continue (lambda (v) (funcState state)) throw))))))
+       (append (cadr (stripLayers (getFuncLayers (cadr funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
+                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (car (stripLayers (getFuncLayers (cadr funcall) state) state)) state break continue return throw) break continue (lambda (v) (funcState state)) throw)))))))
   
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
@@ -246,8 +246,8 @@
   (lambda (funcall state break continue return throw)
     (call/cc
      (lambda (funcReturn)
-       (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
-                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (stripLayers (getFuncLayers (cadr funcall) state) state) state break continue return throw) break continue funcReturn throw))))))
+       (append (cadr (stripLayers (getFuncLayers (cadr funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
+                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (car (stripLayers (getFuncLayers (cadr funcall) state) state)) state break continue return throw) break continue funcReturn throw)))))))
 
 ;--------------M_bool-----------------
 ;M_bool checks if bool is true or false, returns true if boolean or false otherwise
@@ -402,8 +402,8 @@
   (lambda (state)
     (cond
      ((null? (cdr state)) 1)
-     (else (+ 1 (getNumLayers (cdr state)))))))
-
+     (else (+ 1 (getNumLayers (cdr state))))))) 
+  
 ;strips layers off of the state
 (define stripLayers
   (lambda (num state)
@@ -413,8 +413,9 @@
 (define stripLayersHelper
   (lambda (num state)
     (cond
-      ((eq? 0 num) state)
-      (else (stripLayersHelper (- 1 num) (cdr state))))))
+      ((eq? 0 num) (list state '()))
+      ((null? (cadr (stripLayersHelper (- num 1) (cdr state)))) (list (car (stripLayersHelper (- num 1) (cdr state))) (car state)))
+      (else (list (car (stripLayersHelper (- num 1) (cdr state))) (list (cadr (stripLayersHelper (- num 1) (cdr state))) (car state)))))))
 
 ;makes a new state by adding the function closure to the top layer of the state
 (define getStateFromFunc
@@ -452,11 +453,6 @@
 (define getFuncLayers
   (lambda (funcName state)
     (caddr (getValueFromState funcName state))))
-
-;Returns the first layer fo the state to check
-(define getNextLayer
-  (lambda (state)
-    (first state)))
      
 ;adds a new layer to the state
 (define addLayerToState
@@ -466,6 +462,7 @@
 ;removes the top layer of the state
 (define removeLayerFromState
   (lambda (state)
+    ;(display (newline)) (display state)
     (rest state)))
 
 ;adds a variable and its corresponding value to the state
@@ -600,3 +597,8 @@
 (define expressions
   (lambda ()
     '(+ - * / % < > <= >= == != || && !)))
+    
+;Returns the first layer fo the state to check
+(define getNextLayer
+  (lambda (state)
+    (first state)))
