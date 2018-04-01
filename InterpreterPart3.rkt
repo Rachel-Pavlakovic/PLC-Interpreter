@@ -132,23 +132,13 @@
         (removeLayerFromState (parseRecurseBlock (cadddr func) (addLayerToState state) break continue return throw))
         (addFunctionToState func state))))
 
+;returns the state after a function is called
 (define M_state_funcall
   (lambda (funcall state break continue return throw)
     (call/cc
      (lambda (funcState)
        (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
                                                 (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (stripLayers (getFuncLayers (cadr funcall) state) state) state break continue return throw) break continue (lambda (v) (funcState state)) throw))))))
-
-(define M_value_funcall
-  (lambda (funcall state break continue return throw)
-    (call/cc
-     (lambda (funcReturn)
-       (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
-                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (stripLayers (getFuncLayers (cadr funcall) state) state) state break continue return throw) break continue funcReturn throw))))))
-
-(define createFuncEnv
-  (lambda (paramLis valLis strippedState state break continue return throw)
-    (assignValuesToParameters paramLis valLis (addLayerToState strippedState) state break continue return throw)))
   
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
@@ -249,7 +239,15 @@
       ((eq? '<= (operator lis)) (<= (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
       ((eq? '== (operator lis)) (eq? (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
       ((eq? '!= (operator lis)) (not (eq? (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw))))
-      (else (M_value_expr lis state break continue return throw)))))  
+      (else (M_value_expr lis state break continue return throw)))))
+
+;returns the value of a function call
+(define M_value_funcall
+  (lambda (funcall state break continue return throw)
+    (call/cc
+     (lambda (funcReturn)
+       (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
+                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (stripLayers (getFuncLayers (cadr funcall) state) state) state break continue return throw) break continue funcReturn throw))))))
 
 ;--------------M_bool-----------------
 ;M_bool checks if bool is true or false, returns true if boolean or false otherwise
@@ -384,6 +382,11 @@
 
 ;state is stored as a list with two sublists. The first sublist is the variable names, the second is the corresponding variable values (NULL if the variable is unassigned)
 
+;creates the environment for a function
+(define createFuncEnv
+  (lambda (paramLis valLis strippedState state break continue return throw)
+    (assignValuesToParameters paramLis valLis (addLayerToState strippedState) state break continue return throw)))
+
 ;adds a function and its closure to the state
 (define addFunctionToState
   (lambda (functionCode state)
@@ -394,16 +397,19 @@
   (lambda (functionCode state)
     (list (caddr functionCode) (cadddr functionCode) (getNumLayers state))))
 
+;returns the number of layers
 (define getNumLayers
   (lambda (state)
     (cond
      ((null? (cdr state)) 1)
      (else (+ 1 (getNumLayers (cdr state)))))))
 
+;strips layers off of the state
 (define stripLayers
   (lambda (num state)
     (stripLayersHelper (- (getNumLayers state) num) state)))
 
+;helper method for stripLayers
 (define stripLayersHelper
   (lambda (num state)
     (cond
