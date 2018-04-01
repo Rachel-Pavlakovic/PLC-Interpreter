@@ -45,7 +45,7 @@
       ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state break continue return throw)) ;assignment without built in declaration
       ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue return throw))
       ((eq? (getKey exp) 'function)  (M_state_func exp state break continue return throw))
-      ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw))
+      ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw)) 
       ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
@@ -132,11 +132,14 @@
         (removeLayerFromState (parseRecurseBlock (cadddr func) (addLayerToState state) break continue return throw))
         (addFunctionToState func state))))
 
-;assigns values to the parameters and evaluates the function call
-
-; modify (addLayerToState state) to only take the number of layers that are availible to the function plus the new layer
-;addLayer to state 
 (define M_state_funcall
+  (lambda (funcall state break continue return throw)
+    (call/cc
+     (lambda (funcState)
+       (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
+                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (stripLayers (getFuncLayers (cadr funcall) state) state) state break continue return throw) break continue (lambda (v) (funcState state)) throw))))))
+
+(define M_value_funcall
   (lambda (funcall state break continue return throw)
     (call/cc
      (lambda (funcReturn)
@@ -201,7 +204,7 @@
       ((or (eq? (operator expr) '+)(eq? (operator expr) '-)(eq? (operator expr) '*)(eq? (operator expr) '/)(eq? (operator expr) '%)) (M_value_int expr state break continue return throw))
       ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state break continue return throw))
       ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state break continue return throw))
-      ((eq? (operator expr) 'funcall) (M_state_funcall expr state break continue return throw))
+      ((eq? (operator expr) 'funcall) (M_value_funcall expr state break continue return throw))
       (else (error badop)))))
 
 ;takes an expr that starts with a math symbol and recursively evaluates all of the operations in the expression, returns final value of math expression
@@ -317,6 +320,12 @@
       (else (getVarName (rest stmt))))))
 
 ;--Error Checking Helpers--
+
+(define isDeclardInState
+  (lambda (var state)
+    (cond
+      ((isDeclaredMain var state) #t)
+      (else #f))))
 
 ;checks to see if a variable has been declared or not
 (define isDeclared
@@ -488,7 +497,7 @@
 ;adds a variable and its corresponding value to a layer of the state
 (define addToStateHelper
   (lambda (var val state)
-    (list (cons var (getVarLis state)) (cons val (getValLis state)))))
+    (list (cons var (getVarLis state)) (cons (box val) (getValLis state)))))
 
 ;removes a variable and its corresponding value to a layer of the state
 (define removeFromStateHelper
@@ -504,8 +513,8 @@
   (lambda (var state)
     (cond
       ((null? (getVarLis state)) "Undeclared variable")
-      ((and (eq? (first (getVarLis state)) var)(eq? (first (getValLis state)) 'NULL)) "Unassigned variable")
-      ((eq? (first (getVarLis state)) var) (first (getValLis state)))
+      ((and (eq? (first (getVarLis state)) var)(eq? (unbox (first (getValLis state))) 'NULL)) "Unassigned variable")
+      ((eq? (first (getVarLis state)) var) (unbox (first (getValLis state))))
       (else (getValueFromStateHelper var (list (restOfFirst state) (cdadr state)))))))
 
 ;replaces an already existing variable value pair with an updated value in the same layer - used for already declared variables that are being assigned or reassigned
@@ -513,9 +522,11 @@
   (lambda (var val state)
     (cond
       ((null? (getVarLis state)) "Undeclared variable")
-      ((eq? (first (getVarLis state)) var) (list (cons var (rest (getVarLis state))) (cons val (rest (getValLis state)))))
+      ((eq? (first (getVarLis state)) var) (let ((set-result (set-box! (first (getValLis state)) val)))
+                                                             (list (getVarLis state) (cons (first (getValLis state)) (rest (getValLis state))))))
       (else (list (cons (first (getVarLis state)) (first (replaceInStateHelper var val (list (restOfFirst state) (cdadr state)))))
                   (cons (first (getValLis state)) (firstOfRest (replaceInStateHelper var val (list (restOfFirst state) (cdadr state))))))))))
+
 ;-------------- Abstractions-----------------
 
 ;get operator for math expressions and comparisons
