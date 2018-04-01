@@ -135,17 +135,11 @@
 ;assigns values to the parameters and evaluates the function call
 
 ; modify (addLayerToState state) to only take the number of layers that are availible to the function plus the new layer
-;addLayer to state 
 (define M_state_funcall
   (lambda (funcall state break continue return throw)
     (call/cc
      (lambda (funcReturn)
-       (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
-                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (stripLayers (getFuncLayers (cadr funcall) state) state) state break continue return throw) break continue funcReturn throw))))))
-
-(define createFuncEnv
-  (lambda (paramLis valLis strippedState state break continue return throw)
-    (assignValuesToParameters paramLis valLis (addLayerToState strippedState) state break continue return throw)))
+       (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state) (addLayerToState (stripLayers (getFuncLayers (cadr funcall) state) (assignValuesToParameters (getFuncParams (cadr funcall) state) (cddr funcall) state break continue return throw))) break continue return throw))))))
   
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
@@ -261,12 +255,12 @@
 
 ;assigns values to the parameters for a function call
 (define assignValuesToParameters
-  (lambda (paramLis valLis strippedState state break continue return throw)
+  (lambda (paramLis valLis state break continue return throw)
     (cond
       ((and (null? paramLis) (not (null? valLis))) (error "Arity mismatch: Too many values passed into function call"))
       ((and (null? valLis) (not (null? paramLis))) (error "Arity mismatch: Not enough values passed into function call"))
-      ((and (null? paramLis) (null? valLis)) strippedState)
-      (else (assignValuesToParameters (cdr paramLis) (cdr valLis) (addToState (car paramLis) (M_value (car valLis) state break continue return throw) strippedState) state break continue return throw)))))
+      ((and (null? paramLis) (null? valLis)) state)
+      (else (assignValuesToParameters (cdr paramLis) (cdr valLis) (addToState (car paramLis) (M_value (car valLis) (cdr state) break continue return throw) state) break continue return throw)))))
 
 
 ;checks to see if there is a catch statement that exists
