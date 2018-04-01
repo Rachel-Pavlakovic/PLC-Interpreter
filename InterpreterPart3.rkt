@@ -4,6 +4,7 @@
 ; - Shannon Stork
 
 (require "functionParser.scm")
+(require racket/trace)
 
 ;Interpret takes a filename and runs the code in the file
 (define interpret
@@ -138,8 +139,8 @@
     (call/cc
      (lambda (funcState)
        (append (cadr (stripLayers (getFuncLayers (cadr funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
-                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (car (stripLayers (getFuncLayers (cadr funcall) state) state)) state break continue return throw) break continue (lambda (v) (funcState state)) throw)))))))
-  
+                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (car (stripLayers (getFuncLayers (cadr funcall) state) state)) state break continue return throw) break continue (lambda (v) (funcState state)) (lambda (v s) (throw v state)))))))))
+
 ;---------- M_value-----------
 ;M_value is the main dispatch center for determining the value of code segments
 (define M_value
@@ -247,7 +248,7 @@
     (call/cc
      (lambda (funcReturn)
        (append (cadr (stripLayers (getFuncLayers (cadr funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
-                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (car (stripLayers (getFuncLayers (cadr funcall) state) state)) state break continue return throw) break continue funcReturn throw)))))))
+                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (car (stripLayers (getFuncLayers (cadr funcall) state) state)) state break continue return throw) break continue funcReturn (lambda (v s) (throw v state)))))))))
 
 ;--------------M_bool-----------------
 ;M_bool checks if bool is true or false, returns true if boolean or false otherwise
@@ -602,3 +603,5 @@
 (define getNextLayer
   (lambda (state)
     (first state)))
+
+(trace M_value_funcall)
