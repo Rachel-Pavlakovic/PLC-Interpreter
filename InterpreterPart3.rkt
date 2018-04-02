@@ -4,7 +4,6 @@
 ; - Shannon Stork
 
 (require "functionParser.scm")
-(require racket/trace)
 
 ;Interpret takes a filename and runs the code in the file
 (define interpret
@@ -408,15 +407,29 @@
 ;strips layers off of the state
 (define stripLayers
   (lambda (num state)
-    (stripLayersHelper (- (getNumLayers state) num) state)))
+    (cond
+      ((eq? num 1) (stripLayersHelper2 state))
+      (else (stripLayersHelper (- (getNumLayers state) num) state)))))
 
 ;helper method for stripLayers
 (define stripLayersHelper
   (lambda (num state)
     (cond
       ((eq? 0 num) (list state '()))
+      ;((and (eq? (getNumLevels (cadr (stripLayersHelper (- num 1) (cdr state)))) 1) (not (null? (cadr (stripLayersHelper (- num 1) (cdr state)))))) (list (car (stripLayersHelper (- num 1) (cdr state))) (list (car state))))
       ((null? (cadr (stripLayersHelper (- num 1) (cdr state)))) (list (car (stripLayersHelper (- num 1) (cdr state))) (car state)))
       (else (list (car (stripLayersHelper (- num 1) (cdr state))) (list (cadr (stripLayersHelper (- num 1) (cdr state))) (car state)))))))
+
+(define stripLayersHelper2
+  (lambda (state)
+    (list (car (stripLayersHelper 0 (cdr state))) (list (car state)))))
+
+(define getNumLevels
+  (lambda (state)
+    (cond
+      ((null? state) 1)
+      ;((null? (cdr state)) 1)
+      (else (+ 1 (getNumLevels (car state)))))))
 
 ;makes a new state by adding the function closure to the top layer of the state
 (define getStateFromFunc
@@ -603,5 +616,3 @@
 (define getNextLayer
   (lambda (state)
     (first state)))
-
-(trace M_value_funcall)
