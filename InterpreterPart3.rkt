@@ -27,7 +27,10 @@
       (else (parseRecurseBlock (rest statement) (M_state (first statement) state break continue return throw) break continue return throw)))))
 
 
-;--------------M_state-----------------
+;-----------------------------------------------------------------------------------------------------------------------
+;                                            M_state functions
+;-----------------------------------------------------------------------------------------------------------------------
+
 ;M_state is the main dispatch center which calls different state functions depending on the command in the code statement
 (define M_state
   (lambda (exp state break continue return throw)
@@ -128,8 +131,8 @@
 ;if the function is the main funtion the block of code is run, otherwise the function information is stored for later use
 (define M_state_func
   (lambda (func state break continue return throw)
-    (if (eq? (cadr func) 'main)
-        (removeLayerFromState (parseRecurseBlock (cadddr func) (addLayerToState state) break continue return throw))
+    (if (eq? (firstOfRest func) 'main)
+        (removeLayerFromState (parseRecurseBlock (firstOfRestOfRestOfRest func) (addLayerToState state) break continue return throw))
         (addFunctionToState func state))))
 
 ;returns the state after a function is called
@@ -137,10 +140,13 @@
   (lambda (funcall state break continue return throw)
     (call/cc
      (lambda (funcState)
-       (append (cadr (stripLayers (getFuncLayers (cadr funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
-                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (car (stripLayers (getFuncLayers (cadr funcall) state) state)) state break continue return throw) break continue (lambda (v) (funcState state)) throw)))))))
-  
-;---------- M_value-----------
+       (append (firstOfRest (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
+                                                (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw) break continue (lambda (v) (funcState state)) (lambda (v s) (throw v state)))))))))
+
+;-----------------------------------------------------------------------------------------------------------------------
+;                                            M_value functions
+;-----------------------------------------------------------------------------------------------------------------------
+
 ;M_value is the main dispatch center for determining the value of code segments
 (define M_value
    (lambda (exp state break continue return throw)
@@ -246,10 +252,13 @@
   (lambda (funcall state break continue return throw)
     (call/cc
      (lambda (funcReturn)
-       (append (cadr (stripLayers (getFuncLayers (cadr funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (cadr funcall) state)
-                                                (createFuncEnv (getFuncParams (cadr funcall) state) (cddr funcall) (car (stripLayers (getFuncLayers (cadr funcall) state) state)) state break continue return throw) break continue funcReturn throw)))))))
+       (append (firstOfRest (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
+                                                (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw) break continue funcReturn (lambda (v s) (throw v state)))))))))
 
-;--------------M_bool-----------------
+;-----------------------------------------------------------------------------------------------------------------------
+;                                            M_bool functions
+;-----------------------------------------------------------------------------------------------------------------------
+
 ;M_bool checks if bool is true or false, returns true if boolean or false otherwise
 (define M_bool
   (lambda (bool)
@@ -258,7 +267,9 @@
       ((or (eq? bool 'true) (eq? bool 'false)) #t)
       (else #f))))
 
-;-------------- Helper Methods-----------------
+;-----------------------------------------------------------------------------------------------------------------------
+;                                            Helper functions
+;-----------------------------------------------------------------------------------------------------------------------
 
 ;assigns values to the parameters for a function call
 (define assignValuesToParameters
@@ -267,7 +278,7 @@
       ((and (null? paramLis) (not (null? valLis))) (error "Arity mismatch: Too many values passed into function call"))
       ((and (null? valLis) (not (null? paramLis))) (error "Arity mismatch: Not enough values passed into function call"))
       ((and (null? paramLis) (null? valLis)) strippedState)
-      (else (assignValuesToParameters (cdr paramLis) (cdr valLis) (addToState (car paramLis) (M_value (car valLis) state break continue return throw) strippedState) state break continue return throw)))))
+      (else (assignValuesToParameters (rest paramLis) (rest valLis) (addToState (first paramLis) (M_value (first valLis) state break continue return throw) strippedState) state break continue return throw)))))
 
 
 ;checks to see if there is a catch statement that exists
@@ -317,13 +328,16 @@
       ((eq? (getKey stmt) 'catch) (firstOfRest stmt))
       (else (getVarName (rest stmt))))))
 
-;--Error Checking Helpers--
-
+;checks to see if a variable is declared in the state- does not return any errors
 (define isDeclardInState
   (lambda (var state)
     (cond
       ((isDeclaredMain var state) #t)
       (else #f))))
+
+;-----------------------------------------------------------------------------------------------------------------------
+;                                        Error checking helper functions
+;-----------------------------------------------------------------------------------------------------------------------
 
 ;checks to see if a variable has been declared or not
 (define isDeclared
@@ -378,7 +392,9 @@
       ((and (eq? var (first varLis)) (not (eq? 'NULL (first valLis)))) #t)
       (else (isAssignedHelper var (rest varLis) (rest valLis))))))
 
-;--State Helpers--
+;-----------------------------------------------------------------------------------------------------------------------
+;                                          State helper functions
+;-----------------------------------------------------------------------------------------------------------------------
 
 ;state is stored as a list with two sublists. The first sublist is the variable names, the second is the corresponding variable values (NULL if the variable is unassigned)
 
@@ -390,69 +406,85 @@
 ;adds a function and its closure to the state
 (define addFunctionToState
   (lambda (functionCode state)
-    (addToState (cadr functionCode) (getClosure functionCode state) state)))
+    (addToState (firstOfRest functionCode) (getClosure functionCode state) state)))
 
 ;returns the closure in the form '((formal parameter list) (function body) (new state))
 (define getClosure
   (lambda (functionCode state)
-    (list (caddr functionCode) (cadddr functionCode) (getNumLayers state))))
+    (list (firstOfRestOfRest functionCode) (firstOfRestOfRestOfRest functionCode) (getNumLayers state)))) 
 
 ;returns the number of layers
 (define getNumLayers
   (lambda (state)
     (cond
-     ((null? (cdr state)) 1)
-     (else (+ 1 (getNumLayers (cdr state))))))) 
+     ((null? (rest state)) 1)
+     (else (+ 1 (getNumLayers (rest state))))))) 
   
 ;strips layers off of the state
 (define stripLayers
   (lambda (num state)
-    (stripLayersHelper (- (getNumLayers state) num) state)))
+    (cond
+      ((eq? num 1) (stripLayersHelper2 state))
+      (else (stripLayersHelper (- (getNumLayers state) num) state)))))
 
 ;helper method for stripLayers
 (define stripLayersHelper
   (lambda (num state)
     (cond
       ((eq? 0 num) (list state '()))
-      ((null? (cadr (stripLayersHelper (- num 1) (cdr state)))) (list (car (stripLayersHelper (- num 1) (cdr state))) (car state)))
-      (else (list (car (stripLayersHelper (- num 1) (cdr state))) (list (cadr (stripLayersHelper (- num 1) (cdr state))) (car state)))))))
+      ;((and (eq? (getNumLevels (cadr (stripLayersHelper (- num 1) (rest state)))) 1) (not (null? (cadr (stripLayersHelper (- num 1) (rest state)))))) (list (first (stripLayersHelper (- num 1) (rest state))) (list (first state))))
+      ((null? (firstOfRest (stripLayersHelper (- num 1) (rest state)))) (list (first (stripLayersHelper (- num 1) (rest state))) (first state)))
+      (else (list (first (stripLayersHelper (- num 1) (rest state))) (list (cadr (stripLayersHelper (- num 1) (rest state))) (first state)))))))
+
+;second helper method for stripLayers
+(define stripLayersHelper2
+  (lambda (state)
+    (list (first (stripLayersHelper 0 (rest state))) (list (first state)))))
+
+;gets the number of levels
+(define getNumLevels
+  (lambda (state)
+    (cond
+      ((null? state) 1)
+      ;((null? (rest state)) 1)
+      (else (+ 1 (getNumLevels (first state)))))))
 
 ;makes a new state by adding the function closure to the top layer of the state
 (define getStateFromFunc
   (lambda (functionCode state)
     ;uncomment the following line to add things from the body if needed
-    ;(addBody (cadddr functionCode) (addParams (caddr functionCode) state))))
-    (addParams (caddr functionCode) state)))
+    ;(addBody (firstOfRestOfRestOfRest functionCode) (addParams (firstOfRestOfRest functionCode) state))))
+    (addParams (firstOfRestOfRest functionCode) state)))
 
 ;adds the formal parammeters to the state as 'NULL
 (define addParams
   (lambda (paramList state)
     (cond
       ((null? paramList) state)
-      (else (addParams (cdr paramList) (addToState (car paramList) 'NULL state))))))
+      (else (addParams (rest paramList) (addToState (first paramList) 'NULL state))))))
 
 ;this is probably unnecessary, but keeping it for now
 ;(define addBody
   ;(lambda (body state)
     ;(cond
-      ;((null? (car body)) state)
-      ;((eq? (getKey (car body)) 'var) (addBody (cdr body) (addToState (getVar body) 'NULL)))
-      ;(else (addBody (cdr body) state)))))
+      ;((null? (first body)) state)
+      ;((eq? (getKey (first body)) 'var) (addBody (rest body) (addToState (getVar body) 'NULL)))
+      ;(else (addBody (rest body) state)))))
 
 ;gets the formal parameter list
 (define getFuncParams
   (lambda (funcName state)
-    (car (getValueFromState funcName state))))
+    (first (getValueFromState funcName state))))
 
 ;gets the function body
 (define getFuncBody
   (lambda (funcName state)
-    (cadr (getValueFromState funcName state))))
+    (firstOfRest (getValueFromState funcName state))))
 
 ;gets the new state with the parameters added
 (define getFuncLayers
   (lambda (funcName state)
-    (caddr (getValueFromState funcName state))))
+    (firstOfRestOfRest (getValueFromState funcName state)))) 
      
 ;adds a new layer to the state
 (define addLayerToState
@@ -462,7 +494,6 @@
 ;removes the top layer of the state
 (define removeLayerFromState
   (lambda (state)
-    ;(display (newline)) (display state)
     (rest state)))
 
 ;adds a variable and its corresponding value to the state
@@ -534,8 +565,9 @@
                                                              (list (getVarLis state) (cons (first (getValLis state)) (rest (getValLis state))))))
       (else (list (cons (first (getVarLis state)) (first (replaceInStateHelper var val (list (restOfFirst state) (cdadr state)))))
                   (cons (first (getValLis state)) (firstOfRest (replaceInStateHelper var val (list (restOfFirst state) (cdadr state))))))))))
-
-;-------------- Abstractions-----------------
+;-----------------------------------------------------------------------------------------------------------------------
+;                                            Abstractions
+;-----------------------------------------------------------------------------------------------------------------------
 
 ;get operator for math expressions and comparisons
 (define operator car)
@@ -568,6 +600,9 @@
 ;functions as cdddr
 (define restOfRestOfRest cdddr)
 
+;functions as cadddr
+(define firstOfRestOfRestOfRest cadddr)
+
 ;gets the condition from an if statement or while loop
 (define getCondition cadr)
 
@@ -579,7 +614,7 @@
   (lambda (line)
     (cond
       ((null? (restOfRestOfRest line)) '())
-      (else (cadddr line)))))
+      (else (firstOfRestOfRestOfRest line)))))
 
 ;gets the body of a while loop statement - what happens while the loop condition is true
 (define getLoopbody caddr)
