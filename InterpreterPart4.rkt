@@ -16,7 +16,7 @@
 (define parseRecurse
   (lambda (statement classname state break continue return throw)
     (cond
-      ((null? statement) callClassMain classname state break continue return throw)
+      ((null? statement) (callClassMain classname state break continue return throw))
       (else (parseRecurse (rest statement) classname (M_state (first statement) state break continue return throw) break continue return throw)))))
 
 ;callClassMain
@@ -457,12 +457,12 @@
     (cond
       ((null? classBody) state)
       ((or (eq? (firstOfFirst classBody) 'function) (eq? (firstOfFirst classBody) 'static-function)) (getFuncClosures (rest classBody) (M_state (first classBody) state break continue return throw) break continue return throw))
-      (else getFuncClosure (rest classBody) state break continue return throw))))
+      (else (getFuncClosures (rest classBody) state break continue return throw)))))
 
 ;returns the closure in the form '((formal parameter list) (function body) (new state))
 (define getFuncClosure
   (lambda (functionCode state)
-    (list (firstOfRestOfRest functionCode) (firstOfRestOfRestOfRest functionCode) (getNumLayers state)))) 
+     (list (firstOfRestOfRest functionCode) (firstOfRestOfRestOfRest functionCode) (getNumLayers state))))
 
 ;returns the number of layers
 (define getNumLayers
