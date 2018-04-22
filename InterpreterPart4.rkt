@@ -48,7 +48,10 @@
       ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state break continue return throw)) ;assignment without built in declaration
       ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue return throw))
       ((eq? (getKey exp) 'function)  (M_state_func exp state break continue return throw))
-      ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw)) 
+      ((eq? (getKey exp) 'static-function) (M_state_func exp state break continue return throw))
+      ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw))
+      ((eq? (getKey exp) 'dot) (M_state_dot exp state break continue return throw))
+      ((eq? (getKey exp) 'class) (M_state_class exp state break continue return throw))
       ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
@@ -143,6 +146,15 @@
        (append (firstOfRest (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
                                                 (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw) break continue (lambda (v) (funcState state)) (lambda (v s) (throw v state)))))))))
 
+;returns the state after a class is declared
+(define M_state_class
+  (lambda (exp state break continue return throw)
+    state))
+
+;returns the state after a dot (ex: a.add())
+(define M_state_dot
+  (lambda (exp state break continue return throw)
+    state))
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_value functions
 ;-----------------------------------------------------------------------------------------------------------------------
@@ -159,6 +171,7 @@
       ((eq? (getKey exp) 'return) (M_value_return exp state break continue return throw))
       ((eq? (getKey exp) '=) (M_value_assign exp state break continue return throw))
       ((eq? (getKey exp) 'funcall) (M_value_func exp state break contnue return throw))
+      ((eq? (getKey exp) 'dot) (M_value_dot exp state break continue return throw))
       ((member (getKey exp) (expressions)) (M_value_expr exp state break continue return throw)))))
 
 ;returns the value of var
@@ -254,6 +267,11 @@
      (lambda (funcReturn)
        (append (firstOfRest (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
                                                 (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw) break continue funcReturn (lambda (v s) (throw v state)))))))))
+
+;returns the value of a dot call (ex a.add())
+(define M_value_dot
+  (lambda (exp state break continue return throw)
+    exp))
 
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_bool functions
