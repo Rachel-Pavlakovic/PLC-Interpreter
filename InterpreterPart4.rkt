@@ -415,7 +415,10 @@
 ;-----------------------------------------------------------------------------------------------------------------------
 
 ;state is stored as a list with two sublists. The first sublist is the variable names, the second is the corresponding variable values (NULL if the variable is unassigned)
-
+(define addClassToState
+  (lambda (classCode state break continue return throw)
+    (addToState (firstOfRest classCode) (getClassClosure classCode state break continue return throw) state)))
+    
 ;creates the environment for a function
 (define createFuncEnv
   (lambda (paramLis valLis strippedState state break continue return throw)
@@ -424,10 +427,29 @@
 ;adds a function and its closure to the state
 (define addFunctionToState
   (lambda (functionCode state)
-    (addToState (firstOfRest functionCode) (getClosure functionCode state) state)))
+    (addToState (firstOfRest functionCode) (getFuncClosure functionCode state) state)))
+
+;returns the class closure in the form '((parent class) (instance fields) (functions and closures))
+(define getClassClosure
+  (lambda (classCode state break continue return throw)
+    (list (firstOfRestOfRest classCode) (getInstanceFields (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw) (getFuncClosures (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw))))
+
+(define getInstanceFields
+  (lambda (classBody state break continue return throw)
+    (cond
+      ((null? classBody) state)
+      ((eq? (firstOfFirst classBody) 'var) (getInstanceFields (rest classBody) (M_state (first classBody) state break continue return throw) break continue return throw))
+      (else (getInstanceFields (rest classBody) state break continue return throw)))))
+
+(define getFuncClosures
+  (lambda (classBody state break continue return throw)
+    (cond
+      ((null? classBody) state)
+      ((or (eq? (firstOfFirst classBody) 'function) (eq? (firstOfFirst classBody) 'static-function)) (getFuncClosures (rest classBody) (M_state (first classBody) state break continue return throw) break continue return throw))
+      (else getFuncClosure (rest classBody) state break continue return throw))))
 
 ;returns the closure in the form '((formal parameter list) (function body) (new state))
-(define getClosure
+(define getFuncClosure
   (lambda (functionCode state)
     (list (firstOfRestOfRest functionCode) (firstOfRestOfRestOfRest functionCode) (getNumLayers state)))) 
 
