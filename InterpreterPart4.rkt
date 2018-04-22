@@ -434,24 +434,17 @@
   (lambda (classCode state break continue return throw)
     (list (firstOfRestOfRest classCode) (getInstanceFields (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw) (getFuncClosures (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw))))
 
+(define getParentClass
+  (lambda (className state)
+    first (getValueFromState className state)))
+
 (define getInstanceFields
-  (lambda (classBody state break continue return throw)
-    (cond
-      ((null? classBody) state)
-      ((eq? (firstOfFirst classBody) 'var) (getInstanceFields (rest classBody) (M_state (first classBody) state break continue return throw) break continue return throw))
-      (else (getInstanceFields (rest classBody) state break continue return throw)))))
+  (lambda (className state)
+    firstOfRest (getValueFromState className state)))
 
-(define getFuncClosures
-  (lambda (classBody state break continue return throw)
-    (cond
-      ((null? classBody) state)
-      ((or (eq? (firstOfFirst classBody) 'function) (eq? (firstOfFirst classBody) 'static-function)) (getFuncClosures (rest classBody) (M_state (first classBody) state break continue return throw) break continue return throw))
-      (else getFuncClosure (rest classBody) state break continue return throw))))
-
-;returns the closure in the form '((formal parameter list) (function body) (new state))
-(define getFuncClosure
-  (lambda (functionCode state)
-    (list (firstOfRestOfRest functionCode) (firstOfRestOfRestOfRest functionCode) (getNumLayers state)))) 
+(define getFunctions
+  (lambda (className state)
+    firstOfRestofRest (getValueFromState className state)))
 
 ;returns the number of layers
 (define getNumLayers
@@ -502,14 +495,6 @@
     (cond
       ((null? paramList) state)
       (else (addParams (rest paramList) (addToState (first paramList) 'NULL state))))))
-
-;this is probably unnecessary, but keeping it for now
-;(define addBody
-  ;(lambda (body state)
-    ;(cond
-      ;((null? (first body)) state)
-      ;((eq? (getKey (first body)) 'var) (addBody (rest body) (addToState (getVar body) 'NULL)))
-      ;(else (addBody (rest body) state)))))
 
 ;gets the formal parameter list
 (define getFuncParams
