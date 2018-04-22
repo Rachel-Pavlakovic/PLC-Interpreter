@@ -7,17 +7,23 @@
 
 ;Interpret takes a filename and runs the code in the file
 (define interpret
-  (lambda (fileName)
+  (lambda (fileName classname)
     (call/cc
      (lambda (return)
-       (parseRecurse (parser fileName) '((() ())) (lambda (v1) (error "Invalid use of break")) (lambda (v2) (error "Invalid use of continue")) return (lambda (v3 v4) (error "Invalid use of throw")))))))
+       (parseRecurse (parser fileName) classname '((() ())) (lambda (v1) (error "Invalid use of break")) (lambda (v2) (error "Invalid use of continue")) return (lambda (v3 v4) (error "Invalid use of throw")))))))
 
 ;Parserecurse recurses through parsed code and returns the return value
 (define parseRecurse
-  (lambda (statement state break continue return throw)
+  (lambda (statement classname state break continue return throw)
     (cond
-      ((null? statement) (error "No return statement"))
-      (else (parseRecurse (rest statement) (M_state (first statement) state break continue return throw) break continue return throw)))))
+      ((null? statement) callClassMain classname state break continue return throw)
+      (else (parseRecurse (rest statement) classname (M_state (first statement) state break continue return throw) break continue return throw)))))
+
+;callClassMain
+;takes state and calls the main function of the desired class
+(define callClassMain
+  (lambda (classname state break continue return throw)
+    (parseRecurseBlock (getFuncBody 'main (getFunctions classname state)) state break continue return throw)))
 
 ;Parserecurse recurses through parsed code and returns the state after a block of code
 (define parseRecurseBlock
@@ -48,7 +54,7 @@
       ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state break continue return throw)) ;assignment without built in declaration
       ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue return throw))
       ((eq? (getKey exp) 'function)  (M_state_func exp state break continue return throw))
-      ((eq? (getKey exp) 'static-function) (M_state_func exp state break continue return throw))
+      ((eq? (getKey exp) 'static-function) (M_state_static_func exp state break continue return throw))
       ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw))
       ((eq? (getKey exp) 'dot) (M_state_dot exp state break continue return throw))
       ((eq? (getKey exp) 'class) (M_state_class exp state break continue return throw))
@@ -138,6 +144,11 @@
         (removeLayerFromState (parseRecurseBlock (firstOfRestOfRestOfRest func) (addLayerToState state) break continue return throw))
         (addFunctionToState func state))))
 
+
+(define M_state_static_func
+  (lambda (func state break continue return throw)
+    (addFunctionToState func state)))
+
 ;returns the state after a function is called
 (define M_state_funcall
   (lambda (funcall state break continue return throw)
@@ -149,7 +160,7 @@
 ;returns the state after a class is declared
 (define M_state_class
   (lambda (class state break continue return throw)
-    addClassToState class state break continue return throw))
+    (addClassToState class state break continue return throw)))
 
 ;returns the state after a dot (ex: a.add())
 (define M_state_dot
@@ -434,17 +445,24 @@
   (lambda (classCode state break continue return throw)
     (list (firstOfRestOfRest classCode) (getInstanceFields (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw) (getFuncClosures (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw))))
 
-(define getParentClass
-  (lambda (className state)
-    first (getValueFromState className state)))
-
 (define getInstanceFields
-  (lambda (className state)
-    firstOfRest (getValueFromState className state)))
+  (lambda (classBody state break continue return throw)
+    (cond
+      ((null? classBody) state)
+      ((eq? (firstOfFirst classBody) 'var) (getInstanceFields (rest classBody) (M_state (first classBody) state break continue return throw) break continue return throw))
+      (else (getInstanceFields (rest classBody) state break continue return throw)))))
 
-(define getFunctions
-  (lambda (className state)
-    firstOfRestofRest (getValueFromState className state)))
+(define getFuncClosures
+  (lambda (classBody state break continue return throw)
+    (cond
+      ((null? classBody) state)
+      ((or (eq? (firstOfFirst classBody) 'function) (eq? (firstOfFirst classBody) 'static-function)) (getFuncClosures (rest classBody) (M_state (first classBody) state break continue return throw) break continue return throw))
+      (else getFuncClosure (rest classBody) state break continue return throw))))
+
+;returns the closure in the form '((formal parameter list) (function body) (new state))
+(define getFuncClosure
+  (lambda (functionCode state)
+    (list (firstOfRestOfRest functionCode) (firstOfRestOfRestOfRest functionCode) (getNumLayers state)))) 
 
 ;returns the number of layers
 (define getNumLayers
@@ -495,6 +513,14 @@
     (cond
       ((null? paramList) state)
       (else (addParams (rest paramList) (addToState (first paramList) 'NULL state))))))
+
+;this is probably unnecessary, but keeping it for now
+;(define addBody
+  ;(lambda (body state)
+    ;(cond
+      ;((null? (first body)) state)
+      ;((eq? (getKey (first body)) 'var) (addBody (rest body) (addToState (getVar body) 'NULL)))
+      ;(else (addBody (rest body) state)))))
 
 ;gets the formal parameter list
 (define getFuncParams
