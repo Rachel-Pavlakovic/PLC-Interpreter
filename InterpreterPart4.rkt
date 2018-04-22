@@ -443,14 +443,14 @@
 ;returns the class closure in the form '((parent class) (instance fields) (functions and closures))
 (define getClassClosure
   (lambda (classCode state break continue return throw)
-    (list (firstOfRestOfRest classCode) (getInstanceFields (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw) (getFuncClosures (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw))))
+    (list (firstOfRestOfRest classCode) (getInstanceClosure (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw) (getFuncClosures (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw))))
 
-(define getInstanceFields
+(define getInstanceClosure
   (lambda (classBody state break continue return throw)
     (cond
       ((null? classBody) state)
-      ((eq? (firstOfFirst classBody) 'var) (getInstanceFields (rest classBody) (M_state (first classBody) state break continue return throw) break continue return throw))
-      (else (getInstanceFields (rest classBody) state break continue return throw)))))
+      ((eq? (firstOfFirst classBody) 'var) (getInstanceClosure (rest classBody) (M_state (first classBody) state break continue return throw) break continue return throw))
+      (else (getInstanceClosure (rest classBody) state break continue return throw)))))
 
 (define getFuncClosures
   (lambda (classBody state break continue return throw)
@@ -477,7 +477,7 @@
 ;returns the functions from a class
 (define getFunctions
   (lambda (className state)
-    firstOfRestofRest (getValueFromState className state)))
+    firstOfRestOfRest (getValueFromState className state)))
 
 ;returns the number of layers
 (define getNumLayers
