@@ -463,6 +463,21 @@
 (define getFuncClosure
   (lambda (functionCode state)
      (list (firstOfRestOfRest functionCode) (firstOfRestOfRestOfRest functionCode) (getNumLayers state))))
+     
+;returns the parent class of a child class
+(define getParentClass
+  (lambda (className state)
+    first (getValueFromState className state)))
+
+;returns the instance fields from a class
+(define getInstanceFields
+  (lambda (className state)
+    firstOfRest (getValueFromState className state)))
+
+;returns the functions from a class
+(define getFunctions
+  (lambda (className state)
+    firstOfRestofRest (getValueFromState className state)))
 
 ;returns the number of layers
 (define getNumLayers
