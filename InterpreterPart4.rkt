@@ -148,8 +148,8 @@
 
 ;returns the state after a class is declared
 (define M_state_class
-  (lambda (exp state break continue return throw)
-    state))
+  (lambda (class state break continue return throw)
+    addClassToState class state))
 
 ;returns the state after a dot (ex: a.add())
 (define M_state_dot
