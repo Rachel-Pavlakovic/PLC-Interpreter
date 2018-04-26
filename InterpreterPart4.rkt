@@ -144,7 +144,6 @@
         (removeLayerFromState (parseRecurseBlock (firstOfRestOfRestOfRest func) (addLayerToState state) break continue return throw))
         (addFunctionToState func state))))
 
-
 (define M_state_static_func
   (lambda (func state break continue return throw)
     (addFunctionToState func state)))
@@ -171,6 +170,7 @@
 (define M_state_new
   (lambda (exp state break continue return throw)
     state))
+
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_value functions
 ;-----------------------------------------------------------------------------------------------------------------------
@@ -295,7 +295,7 @@
 (define M_value_new
   (lambda (exp state break continue return throw)
     exp))
-
+      
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_bool functions
 ;-----------------------------------------------------------------------------------------------------------------------
