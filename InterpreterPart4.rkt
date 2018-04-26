@@ -32,7 +32,6 @@
       ((null? statement) state)
       (else (parseRecurseBlock (rest statement) (M_state (first statement) state break continue return throw) break continue return throw)))))
 
-
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_state functions
 ;-----------------------------------------------------------------------------------------------------------------------
@@ -58,6 +57,7 @@
       ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw))
       ((eq? (getKey exp) 'dot) (M_state_dot exp state break continue return throw))
       ((eq? (getKey exp) 'class) (M_state_class exp state break continue return throw))
+      ((eq? (getKey exp) 'new) (M_state_new exp state break continue return throw))
       ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
@@ -144,7 +144,6 @@
         (removeLayerFromState (parseRecurseBlock (firstOfRestOfRestOfRest func) (addLayerToState state) break continue return throw))
         (addFunctionToState func state))))
 
-
 (define M_state_static_func
   (lambda (func state break continue return throw)
     (addFunctionToState func state)))
@@ -166,6 +165,12 @@
 (define M_state_dot
   (lambda (exp state break continue return throw)
     state))
+
+;returns the state after new 
+(define M_state_new
+  (lambda (exp state break continue return throw)
+    state))
+
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_value functions
 ;-----------------------------------------------------------------------------------------------------------------------
@@ -183,6 +188,7 @@
       ((eq? (getKey exp) '=) (M_value_assign exp state break continue return throw))
       ((eq? (getKey exp) 'funcall) (M_value_func exp state break contnue return throw))
       ((eq? (getKey exp) 'dot) (M_value_dot exp state break continue return throw))
+      ((eq? (getKey exp) 'new) (M_value_new exp state break continue return throw))
       ((member (getKey exp) (expressions)) (M_value_expr exp state break continue return throw)))))
 
 ;returns the value of var
@@ -225,6 +231,7 @@
       ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state break continue return throw))
       ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state break continue return throw))
       ((eq? (operator expr) 'funcall) (M_value_funcall expr state break continue return throw))
+      ((eq? (operator expr) 'new) (M_value_new expr state break continue return throw))
       (else (error badop)))))
 
 ;takes an expr that starts with a math symbol and recursively evaluates all of the operations in the expression, returns final value of math expression
@@ -284,6 +291,11 @@
   (lambda (exp state break continue return throw)
     exp))
 
+;returns the value for new
+(define M_value_new
+  (lambda (exp state break continue return throw)
+    exp))
+      
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_bool functions
 ;-----------------------------------------------------------------------------------------------------------------------
