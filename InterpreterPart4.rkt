@@ -32,6 +32,7 @@
       ((null? statement) state)
       (else (parseRecurseBlock (rest statement) (M_state (first statement) state break continue return throw) break continue return throw)))))
 
+
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_state functions
 ;-----------------------------------------------------------------------------------------------------------------------
@@ -57,7 +58,6 @@
       ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw))
       ((eq? (getKey exp) 'dot) (M_state_dot exp state break continue return throw))
       ((eq? (getKey exp) 'class) (M_state_class exp state break continue return throw))
-      ((eq? (getKey exp) 'new) (M_state_new exp state break continue return throw))
       ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
@@ -166,11 +166,6 @@
 (define M_state_dot
   (lambda (exp state break continue return throw)
     state))
-
-;returns the state after new 
-(define M_state_new
-  (lambda (exp state break continue return throw)
-    state))
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_value functions
 ;-----------------------------------------------------------------------------------------------------------------------
@@ -188,7 +183,6 @@
       ((eq? (getKey exp) '=) (M_value_assign exp state break continue return throw))
       ((eq? (getKey exp) 'funcall) (M_value_func exp state break contnue return throw))
       ((eq? (getKey exp) 'dot) (M_value_dot exp state break continue return throw))
-      ((eq? (getKey exp) 'new) (M_value_new exp state break continue return throw))
       ((member (getKey exp) (expressions)) (M_value_expr exp state break continue return throw)))))
 
 ;returns the value of var
@@ -231,7 +225,6 @@
       ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state break continue return throw))
       ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state break continue return throw))
       ((eq? (operator expr) 'funcall) (M_value_funcall expr state break continue return throw))
-      ((eq? (operator expr) 'new) (M_value_new expr state break continue return throw))
       (else (error badop)))))
 
 ;takes an expr that starts with a math symbol and recursively evaluates all of the operations in the expression, returns final value of math expression
@@ -288,11 +281,6 @@
 
 ;returns the value of a dot call (ex a.add())
 (define M_value_dot
-  (lambda (exp state break continue return throw)
-    exp))
-
-;returns the value for new
-(define M_value_new
   (lambda (exp state break continue return throw)
     exp))
 
@@ -441,6 +429,17 @@
 (define addClassToState
   (lambda (classCode state break continue return throw)
     (addToState (firstOfRest classCode) (getClassClosure classCode state break continue return throw) state)))
+
+; '((class) (instance fields of class) (instance fields of parent))
+(define addInstanceToState
+  (lambda (instanceDec state)
+    (addToState (firstOfRest instanceDec) (getInstanceClosureNew (firstOfRestOfRest instanceDec) state) state)))
+
+(define getInstanceClosureNew
+  (lambda (instanceCode state)
+    (cond
+      ((eq? (getParentClass (firstOfRest instanceCode) state) 'NULL) (list (firstOfRest instanceCode) (getInstanceFields (firstOfRest instanceCode) state) '(()())))
+      (else (list (firstOfRest instanceCode) (getInstanceFields (firstOfRest instanceCode) state) (getInstanceFields (getParentClass (firstOfRest instanceCode) state)))))))
     
 ;creates the environment for a function
 (define createFuncEnv
@@ -475,16 +474,30 @@
 (define getFuncClosure
   (lambda (functionCode state)
      (list (firstOfRestOfRest functionCode) (firstOfRestOfRestOfRest functionCode) (getNumLayers state))))
-     
+
+(define getInstanceClass
+  (lambda (instanceName state)
+    (first (getValueFromState instanceName state))))
+
+(define getInstanceFieldList
+  (lambda (instanceName state)
+    (firstOfRest (getValueFromState instanceName state))))
+
+(define getInstanceFieldsParent
+  (lambda (instanceName state)
+    (firstOfRestOfRest (getValueFromState instanceName state))))
+
 ;returns the parent class of a child class
 (define getParentClass
   (lambda (className state)
-    first (getValueFromState className state)))
+    (cond
+      ((eq? (first (getValueFromState className state)) '()) 'NULL)
+      (else (first (getValueFromState className state))))))
 
 ;returns the instance fields from a class
 (define getInstanceFields
   (lambda (className state)
-    firstOfRest (getValueFromState className state)))
+    (firstOfRest (getValueFromState className state))))
 
 ;returns the functions from a class
 (define getFunctions
