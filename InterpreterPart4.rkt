@@ -441,6 +441,17 @@
 (define addClassToState
   (lambda (classCode state break continue return throw)
     (addToState (firstOfRest classCode) (getClassClosure classCode state break continue return throw) state)))
+
+; '((class) (instance fields of class) (instance fields of parent))
+(define addInstanceToState
+  (lambda (instanceDec state)
+    (addToState (firstOfRest instanceDec) (getInstanceClosureNew (firstOfRestOfRest instanceDec) state) state)))
+
+(define getInstanceClosureNew
+  (lambda (instanceCode state)
+    (cond
+      ((eq? (getParentClass (firstOfRest instanceCode) state) 'NULL) (list (firstOfRest instanceCode) (getInstanceFields (firstOfRest instanceCode) state) '(()())))
+      (else (list (firstOfRest instanceCode) (getInstanceFields (firstOfRest instanceCode) state) (getInstanceFields (getParentClass (firstOfRest instanceCode) state)))))))
     
 ;creates the environment for a function
 (define createFuncEnv
@@ -475,16 +486,30 @@
 (define getFuncClosure
   (lambda (functionCode state)
      (list (firstOfRestOfRest functionCode) (firstOfRestOfRestOfRest functionCode) (getNumLayers state))))
-     
+
+(define getInstanceClass
+  (lambda (instanceName state)
+    (first (getValueFromState instanceName state))))
+
+(define getInstanceFieldList
+  (lambda (instanceName state)
+    (firstOfRest (getValueFromState instanceName state))))
+
+(define getInstanceFieldsParent
+  (lambda (instanceName state)
+    (firstOfRestOfRest (getValueFromState instanceName state))))
+
 ;returns the parent class of a child class
 (define getParentClass
   (lambda (className state)
-    first (getValueFromState className state)))
+    (cond
+      ((eq? (first (getValueFromState className state)) '()) 'NULL)
+      (else (first (getValueFromState className state))))))
 
 ;returns the instance fields from a class
 (define getInstanceFields
   (lambda (className state)
-    firstOfRest (getValueFromState className state)))
+    (firstOfRest (getValueFromState className state))))
 
 ;returns the functions from a class
 (define getFunctions
