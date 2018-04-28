@@ -55,9 +55,9 @@
       ((eq? (getKey exp) 'function)  (M_state_func exp state break continue return throw currentClass instance))
       ((eq? (getKey exp) 'static-function) (M_state_static_func exp state break continue return throw currentClass instance))
       ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw currentClass instance))
-      ((eq? (getKey exp) 'dot) (M_state_dot exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'dot) state)
       ((eq? (getKey exp) 'class) (M_state_class exp state break continue return throw currentClass instance))
-      ((eq? (getKey exp) 'new) (M_state_new exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'new) state)
       ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
@@ -161,15 +161,7 @@
   (lambda (class state break continue return throw currentClass instance)
     (addClassToState class state break continue return throw currentClass instance)))
 
-;returns the state after a dot (ex: a.add())
-(define M_state_dot
-  (lambda (exp state break continue return throw currentClass instance)
-    state))
 
-;returns the state after new 
-(define M_state_new
-  (lambda (exp state break continue return throw currentClass instance)
-    (addInstanceToState exp state)))
 
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_value functions
@@ -186,7 +178,7 @@
       ((eq? (getKey exp) 'var) (M_value_var exp state break continue return throw currentClass instance))
       ((eq? (getKey exp) 'return) (M_value_return exp state break continue return throw currentClass instance))
       ((eq? (getKey exp) '=) (M_value_assign exp state break continue return throw currentClass instance))
-      ((eq? (getKey exp) 'funcall) (M_value_func exp state break contnue return throw currentClass instance))
+      ((eq? (getKey exp) 'funcall) (M_value_funcall exp state break contnue return throw currentClass instance))
       ((eq? (getKey exp) 'dot) (M_value_dot exp state break continue return throw currentClass instance))
       ((eq? (getKey exp) 'new) (M_value_new exp state break continue return throw currentClass instance))
       ((member (getKey exp) (expressions)) (M_value_expr exp state break continue return throw currentClass instance)))))
