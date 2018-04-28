@@ -10,28 +10,27 @@
   (lambda (fileName classname)
     (call/cc
      (lambda (return)
-       (parseRecurse (parser fileName) classname '((() ())) (lambda (v1) (error "Invalid use of break")) (lambda (v2) (error "Invalid use of continue")) return (lambda (v3 v4) (error "Invalid use of throw")))))))
+       (parseRecurse (parser fileName) classname '((() ())) (lambda (v1) (error "Invalid use of break")) (lambda (v2) (error "Invalid use of continue")) return (lambda (v3 v4) (error "Invalid use of throw")) '() '() )))))
 
 ;Parserecurse recurses through parsed code and returns the return value
 (define parseRecurse
-  (lambda (statement classname state break continue return throw)
+  (lambda (statement classname state break continue return throw currentClass instance)
     (cond
-      ((null? statement) (callClassMain classname state break continue return throw))
-      (else (parseRecurse (rest statement) classname (M_state (first statement) state break continue return throw) break continue return throw)))))
+      ((null? statement) (callClassMain classname state break continue return throw currentClass instance))
+      (else (parseRecurse (rest statement) classname (M_state (first statement) state break continue return throw currentClass instance) break continue return throw currentClass instance)))))
 
 ;callClassMain
 ;takes state and calls the main function of the desired class
 (define callClassMain
-  (lambda (classname state break continue return throw)
-    (parseRecurseBlock (getFuncBody 'main (getFunctions classname state)) state break continue return throw)))
+  (lambda (classname state break continue return throw currentClass instance)
+    (parseRecurseBlock (getFuncBody 'main (getFunctions classname state)) state break continue return throw currentClass instance)))
 
 ;Parserecurse recurses through parsed code and returns the state after a block of code
 (define parseRecurseBlock
-  (lambda (statement state break continue return throw)
+  (lambda (statement state break continue return throw currentClass instance)
     (cond
       ((null? statement) state)
-      (else (parseRecurseBlock (rest statement) (M_state (first statement) state break continue return throw) break continue return throw)))))
-
+      (else (parseRecurseBlock (rest statement) (M_state (first statement) state break continue return throw currentClass instance) break continue return throw currentClass instance)))))
 
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_state functions
@@ -39,55 +38,56 @@
 
 ;M_state is the main dispatch center which calls different state functions depending on the command in the code statement
 (define M_state
-  (lambda (exp state break continue return throw)
+  (lambda (exp state break continue return throw currentClass instance)
     (cond
       ((null? exp) state)
-      ((eq? (getKey exp) 'if) (M_state_if exp state break continue return throw))
-      ((eq? (getKey exp) 'while) (call/cc (lambda (brk) (M_state_while exp state brk continue return throw))))
+      ((eq? (getKey exp) 'if) (M_state_if exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'while) (call/cc (lambda (brk) (M_state_while exp state brk continue return throw currentClass instance))))
       ((eq? (getKey exp) 'break) (break (removeLayerFromState state)))
       ((eq? (getKey exp) 'continue) (continue state))
-      ((eq? (getKey exp) 'try) (M_state_try (rest exp) state break continue return throw))
-      ((eq? (getKey exp) 'throw) (throw (M_value (firstOfRest exp) state break continue return throw) state))
+      ((eq? (getKey exp) 'try) (M_state_try (rest exp) state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'throw) (throw (M_value (firstOfRest exp) state break continue return throw currentClass instance) state))
       ((and (eq? (getKey exp) 'var) (not (pair? (restOfRest exp)))) (addToState (getVar exp) 'NULL state)) ;declaration no assignment
-      ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state break continue return throw) (addToState (getVar exp) 'NULL state) break continue return throw)) ;declaration with assignment
-      ((eq? (getKey exp) 'return) (return (M_value exp state break continue return throw))) 
-      ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state break continue return throw)) ;assignment without built in declaration
-      ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue return throw))
-      ((eq? (getKey exp) 'function)  (M_state_func exp state break continue return throw))
-      ((eq? (getKey exp) 'static-function) (M_state_static_func exp state break continue return throw))
-      ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw))
-      ((eq? (getKey exp) 'dot) (M_state_dot exp state break continue return throw))
-      ((eq? (getKey exp) 'class) (M_state_class exp state break continue return throw))
+      ((eq? (getKey exp) 'var) (M_state_dec&assign (getVar exp) (M_value_expr (operand2 exp) state break continue return throw currentClass instance) (addToState (getVar exp) 'NULL state) break continue return throw currentClass instance)) ;declaration with assignment
+      ((eq? (getKey exp) 'return) (return (M_value exp state break continue return throw currentClass instance))) 
+      ((eq? (getKey exp) '=) (M_state_assign (getVar exp) (getExpr exp) state break continue return throw currentClass instance)) ;assignment without built in declaration
+      ((eq? (getKey exp) 'begin) (M_state_begin (rest exp) state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'function)  (M_state_func exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'static-function) (M_state_static_func exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'funcall) (M_state_funcall exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'dot) (M_state_dot exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'class) (M_state_class exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'new) (M_state_new exp state break continue return throw currentClass instance))
       ((member (getKey exp) (expressions)) (M_state_expr exp state))
       (else state))))
 
 ;M_state_if when the code has an 'if command this fucntion breaks it down into condition, then, and else and chooses them based on the condition
 (define M_state_if
-  (lambda (exp state break continue return throw)
+  (lambda (exp state break continue return throw currentClass instance)
     (cond
-      ((M_value_expr (getCondition exp) state break continue return throw) (M_state (getThen exp) state break continue return throw))
+      ((M_value_expr (getCondition exp) state break continue return throw currentClass instance) (M_state (getThen exp) state break continue return throw currentClass instance))
       ((null? (restOfRestOfRest exp)) state)
-      (else (M_state (getElse exp) state break continue return throw)))))
+      (else (M_state (getElse exp) state break continue return throw currentClass instance)))))
 
 ;M_state_while when the code has a 'while this function finds its condition and loopbody then recursively calls the loopbody until the condition is no longer true
 (define M_state_while
-  (lambda (exp state break continue return throw)
+  (lambda (exp state break continue return throw currentClass instance)
     (cond
-      ((M_value_expr (getCondition exp) state break continue return throw) (M_state_while exp (call/cc (lambda (cont) (M_state (getLoopbody exp) state break cont return throw))) break continue return throw))
+      ((M_value_expr (getCondition exp) state break continue return throw currentClass instance) (M_state_while exp (call/cc (lambda (cont) (M_state (getLoopbody exp) state break cont return throw currentClass instance))) break continue return throw currentClass instance))
       (else state))))
 
 ;M_state_dec&assign when a variable is declared and assigned in the same line of code, this adds both the variable and value to the state
 (define M_state_dec&assign
-  (lambda (var expr state break continue return throw)
-    (replaceInState var (M_value_expr expr (M_state_expr expr state) break continue return throw) (M_state_expr expr state))))
+  (lambda (var expr state break continue return throw currentClass instance)
+    (replaceInState var (M_value_expr expr (M_state_expr expr state) break continue return throw currentClass instance) (M_state_expr expr state))))
 
 ;M_state_assign when a variable is already declared, and its value is being redefined
 (define M_state_assign
-  (lambda (var expr state break continue return throw)
+  (lambda (var expr state break continue return throw currentClass instance)
     (cond
       ((and (isDeclared var state) (eq? var expr)) state)
-      ((isAssigned var state) (replaceInState var (M_value_expr expr state break continue return throw) state))
-      ((isDeclared var state) (replaceInState var (M_value_expr expr state break continue return throw) state)))))
+      ((isAssigned var state) (replaceInState var (M_value_expr expr state break continue return throw currentClass instance) state))
+      ((isDeclared var state) (replaceInState var (M_value_expr expr state break continue return throw currentClass instance) state)))))
 
 ;M_state_expr when M_state doesn't find the key to be if, while, return, etc. this checks the expr to see if it is a statement or value
 (define M_state_expr
@@ -120,170 +120,182 @@
 
 ;returns the state after a block, starting with begin
 (define M_state_begin
-  (lambda (block state break continue return throw)
-     (removeLayerFromState (call/cc (lambda (cont)(parseRecurseBlock block (addLayerToState state) break cont return throw))))))
+  (lambda (block state break continue return throw currentClass instance)
+     (removeLayerFromState (call/cc (lambda (cont)(parseRecurseBlock block (addLayerToState state) break cont return throw currentClass instance))))))
 
 ;returns the state after a try block (may or may not include catch and/or finally)
 (define M_state_try
-  (lambda (block state break continue return throw)
+  (lambda (block state break continue return throw currentClass instance)
     (cond
-      ((finallyExists block) (parseRecurseBlock (getFinally block) (removeLayerFromState (M_state_try_catch block (addLayerToState state) break continue return throw))break continue return throw))
-      (else (M_state_try_catch block (addLayerToState state) break continue return throw)))))
+      ((finallyExists block) (parseRecurseBlock (getFinally block) (removeLayerFromState (M_state_try_catch block (addLayerToState state) break continue return throw currentClass instance))break continue return throw currentClass instance))
+      (else (M_state_try_catch block (addLayerToState state) break continue return throw currentClass instance)))))
 
 ;called by try, handles the case when there is a throw to a catch and when there is not
 (define M_state_try_catch
-  (lambda (block state break continue return throw)
+  (lambda (block state break continue return throw currentClass instance)
     (cond
-      ((catchExists block) (call/cc (lambda (thrw) (parseRecurseBlock (first block) state break continue return (lambda (v s) (thrw (parseRecurseBlock (getCatchCode block) (addToState (getCatchVarName block) v s) break continue return throw)))))))
+      ((catchExists block) (call/cc (lambda (thrw) (parseRecurseBlock (first block) state break continue return (lambda (v s) (thrw (parseRecurseBlock (getCatchCode block) (addToState (getCatchVarName block) v s) break continue return throw currentClass instance)))))))
       (else (call/cc (lambda (thrw2) (parseRecurseBlock (first block) state break continue return (lambda (v s) (thrw2 s)))))))))
 
 ;if the function is the main funtion the block of code is run, otherwise the function information is stored for later use
 (define M_state_func
-  (lambda (func state break continue return throw)
+  (lambda (func state break continue return throw currentClass instance)
     (if (eq? (firstOfRest func) 'main)
-        (removeLayerFromState (parseRecurseBlock (firstOfRestOfRestOfRest func) (addLayerToState state) break continue return throw))
+        (removeLayerFromState (parseRecurseBlock (firstOfRestOfRestOfRest func) (addLayerToState state) break continue return throw currentClass instance))
         (addFunctionToState func state))))
 
-
 (define M_state_static_func
-  (lambda (func state break continue return throw)
+  (lambda (func state break continue return throw currentClass instance)
     (addFunctionToState func state)))
 
 ;returns the state after a function is called
 (define M_state_funcall
-  (lambda (funcall state break continue return throw)
+  (lambda (funcall state break continue return throw currentClass instance)
     (call/cc
      (lambda (funcState)
        (append (firstOfRest (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
-                                                (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw) break continue (lambda (v) (funcState state)) (lambda (v s) (throw v state)))))))))
+                                                (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw currentClass instance) break continue (lambda (v) (funcState state)) (lambda (v s) (throw v state) currentClass instance))))))))
 
 ;returns the state after a class is declared
 (define M_state_class
-  (lambda (class state break continue return throw)
-    (addClassToState class state break continue return throw)))
+  (lambda (class state break continue return throw currentClass instance)
+    (addClassToState class state break continue return throw currentClass instance)))
 
 ;returns the state after a dot (ex: a.add())
 (define M_state_dot
-  (lambda (exp state break continue return throw)
+  (lambda (exp state break continue return throw currentClass instance)
     state))
+
+;returns the state after new 
+(define M_state_new
+  (lambda (exp state break continue return throw currentClass instance)
+    (addInstanceToState exp state)))
+
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_value functions
 ;-----------------------------------------------------------------------------------------------------------------------
 
 ;M_value is the main dispatch center for determining the value of code segments
 (define M_value
-   (lambda (exp state break continue return throw)
+   (lambda (exp state break continue return throw currentClass instance)
     (cond
       ((number? exp) exp)
       ((eq? exp 'true) #t)
       ((eq? exp 'false) #f)
       ((not (pair? exp)) (getValueFromState exp state))
-      ((eq? (getKey exp) 'var) (M_value_var exp state break continue return throw))
-      ((eq? (getKey exp) 'return) (M_value_return exp state break continue return throw))
-      ((eq? (getKey exp) '=) (M_value_assign exp state break continue return throw))
-      ((eq? (getKey exp) 'funcall) (M_value_func exp state break contnue return throw))
-      ((eq? (getKey exp) 'dot) (M_value_dot exp state break continue return throw))
-      ((member (getKey exp) (expressions)) (M_value_expr exp state break continue return throw)))))
+      ((eq? (getKey exp) 'var) (M_value_var exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'return) (M_value_return exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) '=) (M_value_assign exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'funcall) (M_value_func exp state break contnue return throw currentClass instance))
+      ((eq? (getKey exp) 'dot) (M_value_dot exp state break continue return throw currentClass instance))
+      ((eq? (getKey exp) 'new) (M_value_new exp state break continue return throw currentClass instance))
+      ((member (getKey exp) (expressions)) (M_value_expr exp state break continue return throw currentClass instance)))))
 
 ;returns the value of var
 (define M_value_var
-  (lambda (var state break continue return throw)
+  (lambda (var state break continue return throw currentClass instance)
     (getValueFromState var state)))
 
 ;returns value of expr
 (define M_value_assign
-  (lambda (expr state break continue return throw)
+  (lambda (expr state break continue return throw currentClass instance)
     (cond
       ((null? expr))
       ((number? (getExpr expr)) (getExpr expr))
       ((or (eq? (getExpr expr) "true") (eq? (getExpr expr) "false")) (getExpr expr))
-      ((pair? (getExpr expr)) (M_value_expr (getExpr expr) state break continue return throw))
+      ((pair? (getExpr expr)) (M_value_expr (getExpr expr) state break continue return throw currentClass instance))
       (else (getValueFromState (getExpr expr) state)))))
 
 ;takes value of expr and converts #t and #f to true and false
 (define M_value_return
-  (lambda (expr state break continue return throw)
+  (lambda (expr state break continue return throw currentClass instance)
     (cond
       ((null? expr) expr)
-      ((eq? (M_value_expr (operand1 expr) state break continue return throw) #t) 'true)
-      ((eq? (M_value_expr (operand1 expr) state break continue return throw) #f) 'false)
-      (else (M_value_expr (operand1 expr) state break continue return throw)))))
+      ((eq? (M_value_expr (operand1 expr) state break continue return throw currentClass instance) #t) 'true)
+      ((eq? (M_value_expr (operand1 expr) state break continue return throw currentClass instance) #f) 'false)
+      (else (M_value_expr (operand1 expr) state break continue return throw currentClass instance)))))
 
 ;determines if expr is a single value, variable or an operation. if so what kind of operation. this returns the value of the expr
 (define M_value_expr
-  (lambda (expr state break continue return throw)
+  (lambda (expr state break continue return throw currentClass instance)
     (cond
       ((null? expr) expr)
       ((number? expr) expr)
-      ((M_bool expr) (M_value_bool expr state break continue return throw))
+      ((M_bool expr) (M_value_bool expr state break continue return throw currentClass instance))
       ((not (list? expr)) (getValueFromState expr state))
       ((and (not (pair? (rest expr))) (number? (first expr))) (first expr))
       ((and (not (pair? (rest expr))) (eq? (first expr) 'true)) #t)
       ((and (not (pair? (rest expr))) (eq? (first expr) 'false)) #f)
-      ((not (pair? (rest expr))) (M_value_var (first expr) state break continue return throw))
-      ((or (eq? (operator expr) '+)(eq? (operator expr) '-)(eq? (operator expr) '*)(eq? (operator expr) '/)(eq? (operator expr) '%)) (M_value_int expr state break continue return throw))
-      ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state break continue return throw))
-      ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state break continue return throw))
-      ((eq? (operator expr) 'funcall) (M_value_funcall expr state break continue return throw))
+      ((not (pair? (rest expr))) (M_value_var (first expr) state break continue return throw currentClass instance))
+      ((or (eq? (operator expr) '+)(eq? (operator expr) '-)(eq? (operator expr) '*)(eq? (operator expr) '/)(eq? (operator expr) '%)) (M_value_int expr state break continue return throw currentClass instance))
+      ((or (eq? (operator expr) '&&)(eq? (operator expr) '||)(eq? (operator expr) '!)) (M_value_bool expr state break continue return throw currentClass instance))
+      ((or (eq? (operator expr) '>)(eq? (operator expr) '<)(eq? (operator expr) '>=)(eq? (operator expr) '<=)(eq? (operator expr) '==)(eq? (operator expr) '!=)) (M_value_comp expr state break continue return throw currentClass instance))
+      ((eq? (operator expr) 'funcall) (M_value_funcall expr state break continue return throw currentClass instance))
+      ((eq? (operator expr) 'new) (M_value_new expr state break continue return throw currentClass instance))
       (else (error badop)))))
 
 ;takes an expr that starts with a math symbol and recursively evaluates all of the operations in the expression, returns final value of math expression
 (define M_value_int
-  (lambda (lis state break continue return throw)
+  (lambda (lis state break continue return throw currentClass instance)
     (cond
       ((number? lis) lis)
-      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state break continue return throw))
-      ((eq? '+ (operator lis)) (+ (M_value_int (operand1 lis) state break continue return throw) (M_value_int (operand2 lis) state break continue return throw)))
-      ((and (eq? '- (operator lis)) (not (pair? (restOfRest lis)))) (- (M_value_int (operand1 lis) state break continue return throw)))
-      ((and (eq? '- (operator lis)) (pair? (restOfRest lis))) (- (M_value_int (operand1 lis) state break continue return throw) (M_value_int (operand2 lis) state break continue return throw)))
-      ((eq? '* (operator lis)) (* (M_value_int (operand1 lis) state break continue return throw) (M_value_int (operand2 lis) state break continue return throw)))
-      ((eq? '/ (operator lis)) (quotient (M_value_int (operand1 lis) state break continue return throw) (M_value_int (operand2 lis) state break continue return throw)))
-      ((eq? '% (operator lis)) (remainder (M_value_int (operand1 lis) state break continue return throw) (M_value_int (operand2 lis) state break continue return throw)))
-      (else (M_value_expr lis state break continue return throw)))))
+      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state break continue return throw currentClass instance))
+      ((eq? '+ (operator lis)) (+ (M_value_int (operand1 lis) state break continue return throw currentClass instance) (M_value_int (operand2 lis) state break continue return throw currentClass instance)))
+      ((and (eq? '- (operator lis)) (not (pair? (restOfRest lis)))) (- (M_value_int (operand1 lis) state break continue return throw currentClass instance)))
+      ((and (eq? '- (operator lis)) (pair? (restOfRest lis))) (- (M_value_int (operand1 lis) state break continue return throw currentClass instance) (M_value_int (operand2 lis) state break continue return throw currentClass instance)))
+      ((eq? '* (operator lis)) (* (M_value_int (operand1 lis) state break continue return throw currentClass instance) (M_value_int (operand2 lis) state break continue return throw currentClass instance)))
+      ((eq? '/ (operator lis)) (quotient (M_value_int (operand1 lis) state break continue return throw currentClass instance) (M_value_int (operand2 lis) state break continue return throw currentClass instance)))
+      ((eq? '% (operator lis)) (remainder (M_value_int (operand1 lis) state break continue return throw currentClass instance) (M_value_int (operand2 lis) state break continue return throw currentClass instance)))
+      (else (M_value_expr lis state break continue return throw currentClass instance)))))
 
 ;takes an expr that starts with a logic symbol and recursively evaluates all of the operations in the expression. if an operator
 ;is not in the list the code calls M_value_expr in order to determine value of different internal operations, returns final boolean
 (define M_value_bool
-  (lambda (lis state break continue return throw)
+  (lambda (lis state break continue return throw currentClass instance)
     (cond
       ((eq? lis 'true) #t)
       ((eq? lis 'false) #f)
       ((eq? lis #t) #t)
       ((eq? lis #f) #f)
-      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state break continue return throw))
-      ((eq? '&& (operator lis)) (and (M_value_bool (operand1 lis) state break continue return throw) (M_value_bool (operand2 lis) state break continue return throw)))
-      ((eq? '|| (operator lis)) (or (M_value_bool (operand1 lis) state break continue return throw) (M_value_bool (operand2 lis) state break continue return throw)))
-      ((eq? '! (operator lis)) (not (M_value_bool (operand1 lis) state break continue return throw)))
-      (else (M_value_expr lis state break continue return throw)))))
+      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state break continue return throw currentClass instance))
+      ((eq? '&& (operator lis)) (and (M_value_bool (operand1 lis) state break continue return throw currentClass instance) (M_value_bool (operand2 lis) state break continue return throw currentClass instance)))
+      ((eq? '|| (operator lis)) (or (M_value_bool (operand1 lis) state break continue return throw currentClass instance) (M_value_bool (operand2 lis) state break continue return throw currentClass instance)))
+      ((eq? '! (operator lis)) (not (M_value_bool (operand1 lis) state break continue return throw currentClass instance)))
+      (else (M_value_expr lis state break continue return throw currentClass instance)))))
 
 ;takes an expr that starts with a comapison symbol and recursively evaluates all of the operations in the expression. if an operator
 ;is not in the list the code calls M_value_expr in order to determine the value of different internal operations, returns final boolean
 (define M_value_comp
-  (lambda (lis state break continue return throw)
+  (lambda (lis state break continue return throw currentClass instance)
     (cond
       ((number? lis) lis)
-      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state break continue return throw))
-      ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
-      ((eq? '< (operator lis)) (< (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
-      ((eq? '>= (operator lis)) (>= (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
-      ((eq? '<= (operator lis)) (<= (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
-      ((eq? '== (operator lis)) (eq? (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw)))
-      ((eq? '!= (operator lis)) (not (eq? (M_value_comp (operand1 lis) state break continue return throw) (M_value_comp (operand2 lis) state break continue return throw))))
-      (else (M_value_expr lis state break continue return throw)))))
+      ((and (not (pair? lis)) (isAssignedError lis state)) (M_value_var lis state break continue return throw currentClass instance))
+      ((eq? '> (operator lis)) (> (M_value_comp (operand1 lis)  state break continue return throw currentClass instance) (M_value_comp (operand2 lis) state break continue return throw currentClass instance)))
+      ((eq? '< (operator lis)) (< (M_value_comp (operand1 lis) state break continue return throw currentClass instance) (M_value_comp (operand2 lis) state break continue return throw currentClass instance)))
+      ((eq? '>= (operator lis)) (>= (M_value_comp (operand1 lis) state break continue return throw currentClass instance) (M_value_comp (operand2 lis) state break continue return throw currentClass instance)))
+      ((eq? '<= (operator lis)) (<= (M_value_comp (operand1 lis) state break continue return throw currentClass instance) (M_value_comp (operand2 lis) state break continue return throw currentClass instance)))
+      ((eq? '== (operator lis)) (eq? (M_value_comp (operand1 lis) state break continue return throw currentClass instance) (M_value_comp (operand2 lis) state break continue return throw currentClass instance)))
+      ((eq? '!= (operator lis)) (not (eq? (M_value_comp (operand1 lis) state break continue return throw currentClass instance) (M_value_comp (operand2 lis) state break continue return throw currentClass instance))))
+      (else (M_value_expr lis state break continue return throw currentClass instance)))))
 
 ;returns the value of a function call
 (define M_value_funcall
-  (lambda (funcall state break continue return throw)
+  (lambda (funcall state break continue return throw currentClass instance)
     (call/cc
      (lambda (funcReturn)
        (append (firstOfRest (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
-                                                (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw) break continue funcReturn (lambda (v s) (throw v state)))))))))
+                                                (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw currentClass instance) break continue funcReturn (lambda (v s) (throw v state) currentClass instance))))))))
 
 ;returns the value of a dot call (ex a.add())
 (define M_value_dot
-  (lambda (exp state break continue return throw)
+  (lambda (exp state break continue return throw currentClass instance)
     exp))
 
+;returns the value for new
+(define M_value_new
+  (lambda (exp state break continue return throw currentClass instance)
+    exp))
+      
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_bool functions
 ;-----------------------------------------------------------------------------------------------------------------------
@@ -302,12 +314,12 @@
 
 ;assigns values to the parameters for a function call
 (define assignValuesToParameters
-  (lambda (paramLis valLis strippedState state break continue return throw)
+  (lambda (paramLis valLis strippedState state break continue return throw currentClass instance)
     (cond
       ((and (null? paramLis) (not (null? valLis))) (error "Arity mismatch: Too many values passed into function call"))
       ((and (null? valLis) (not (null? paramLis))) (error "Arity mismatch: Not enough values passed into function call"))
       ((and (null? paramLis) (null? valLis)) strippedState)
-      (else (assignValuesToParameters (rest paramLis) (rest valLis) (addToState (first paramLis) (M_value (first valLis) state break continue return throw) strippedState) state break continue return throw)))))
+      (else (assignValuesToParameters (rest paramLis) (rest valLis) (addToState (first paramLis) (M_value (first valLis) state break continue return throw currentClass instance) strippedState) state break continue return throw currentClass instance)))))
 
 
 ;checks to see if there is a catch statement that exists
@@ -427,13 +439,24 @@
 
 ;state is stored as a list with two sublists. The first sublist is the variable names, the second is the corresponding variable values (NULL if the variable is unassigned)
 (define addClassToState
-  (lambda (classCode state break continue return throw)
-    (addToState (firstOfRest classCode) (getClassClosure classCode state break continue return throw) state)))
+  (lambda (classCode state break continue return throw currentClass instance)
+    (addToState (firstOfRest classCode) (getClassClosure classCode state break continue return throw currentClass instance) state)))
+
+; '((class) (instance fields of class) (instance fields of parent))
+(define addInstanceToState
+  (lambda (instanceDec state)
+    (addToState (first instanceDec) (getInstanceClosureNew (firstOfRest instanceDec) state) state)))
+
+(define getInstanceClosureNew
+  (lambda (instanceCode state)
+    (cond
+      ((eq? (getParentClass (firstOfRest instanceCode) state) 'NULL) (list (firstOfRest instanceCode) (getInstanceFields (firstOfRest instanceCode) state) '(()())))
+      (else (list (firstOfRest instanceCode) (getInstanceFields (firstOfRest instanceCode) state) (getInstanceFields (getParentClass (firstOfRest instanceCode) state)))))))
     
 ;creates the environment for a function
 (define createFuncEnv
-  (lambda (paramLis valLis strippedState state break continue return throw)
-    (assignValuesToParameters paramLis valLis (addLayerToState strippedState) state break continue return throw)))
+  (lambda (paramLis valLis strippedState state break continue return throw currentClass instance)
+    (assignValuesToParameters paramLis valLis (addLayerToState strippedState) state break continue return throw currentClass instance)))
 
 ;adds a function and its closure to the state
 (define addFunctionToState
@@ -442,37 +465,51 @@
 
 ;returns the class closure in the form '((parent class) (instance fields) (functions and closures))
 (define getClassClosure
-  (lambda (classCode state break continue return throw)
-    (list (firstOfRestOfRest classCode) (getInstanceClosure (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw) (getFuncClosures (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw))))
+  (lambda (classCode state break continue return throw currentClass instance)
+    (list (firstOfRestOfRest classCode) (getInstanceClosure (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw currentClass instance) (getFuncClosures (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw currentClass instance))))
 
 (define getInstanceClosure
-  (lambda (classBody state break continue return throw)
+  (lambda (classBody state break continue return throw currentClass instance)
     (cond
       ((null? classBody) state)
-      ((eq? (firstOfFirst classBody) 'var) (getInstanceClosure (rest classBody) (M_state (first classBody) state break continue return throw) break continue return throw))
-      (else (getInstanceClosure (rest classBody) state break continue return throw)))))
+      ((eq? (firstOfFirst classBody) 'var) (getInstanceClosure (rest classBody) (M_state (first classBody) state break continue return throw currentClass instance) break continue return throw currentClass instance))
+      (else (getInstanceClosure (rest classBody) state break continue return throw currentClass instance)))))
 
 (define getFuncClosures
-  (lambda (classBody state break continue return throw)
+  (lambda (classBody state break continue return throw currentClass instance)
     (cond
       ((null? classBody) state)
-      ((or (eq? (firstOfFirst classBody) 'function) (eq? (firstOfFirst classBody) 'static-function)) (getFuncClosures (rest classBody) (M_state (first classBody) state break continue return throw) break continue return throw))
-      (else (getFuncClosures (rest classBody) state break continue return throw)))))
+      ((or (eq? (firstOfFirst classBody) 'function) (eq? (firstOfFirst classBody) 'static-function)) (getFuncClosures (rest classBody) (M_state (first classBody) state break continue return throw currentClass instance) break continue return throw currentClass instance))
+      (else (getFuncClosures (rest classBody) state break continue return throw currentClass instance)))))
 
 ;returns the closure in the form '((formal parameter list) (function body) (new state))
 (define getFuncClosure
   (lambda (functionCode state)
      (list (firstOfRestOfRest functionCode) (firstOfRestOfRestOfRest functionCode) (getNumLayers state))))
-     
+
+(define getInstanceClass
+  (lambda (instanceName state)
+    (first (getValueFromState instanceName state))))
+
+(define getInstanceFieldList
+  (lambda (instanceName state)
+    (firstOfRest (getValueFromState instanceName state))))
+
+(define getInstanceFieldsParent
+  (lambda (instanceName state)
+    (firstOfRestOfRest (getValueFromState instanceName state))))
+
 ;returns the parent class of a child class
 (define getParentClass
   (lambda (className state)
-    first (getValueFromState className state)))
+    (cond
+      ((eq? (first (getValueFromState className state)) '()) 'NULL)
+      (else (first (getValueFromState className state))))))
 
 ;returns the instance fields from a class
 (define getInstanceFields
   (lambda (className state)
-    firstOfRest (getValueFromState className state)))
+    (firstOfRest (getValueFromState className state))))
 
 ;returns the functions from a class
 (define getFunctions
