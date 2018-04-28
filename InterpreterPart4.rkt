@@ -169,7 +169,7 @@
 ;returns the state after new 
 (define M_state_new
   (lambda (exp state break continue return throw)
-    state))
+    (addInstanceToState exp state)))
 
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            M_value functions
@@ -289,7 +289,11 @@
 ;returns the value of a dot call (ex a.add())
 (define M_value_dot
   (lambda (exp state break continue return throw)
-    exp))
+    (cond
+      ((eq? (operand1 exp) 'this) ;get value or func from current instance)
+      ((and (pair? (operand1 exp)) (eq? (first (operand1) 'new))) ;get var or func from class closure)
+      ((eq? (operand1 exp) 'super) ;get value or func from parent class)
+      (else ;get value or func from class of what dot is being called on) )))
 
 ;returns the value for new
 (define M_value_new
