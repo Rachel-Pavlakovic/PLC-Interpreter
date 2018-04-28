@@ -437,7 +437,7 @@
 ; '((class) (instance fields of class) (instance fields of parent))
 (define addInstanceToState
   (lambda (instanceDec state)
-    (addToState (firstOfRest instanceDec) (getInstanceClosureNew (firstOfRestOfRest instanceDec) state) state)))
+    (addToState (first instanceDec) (getInstanceClosureNew (firstOfRest instanceDec) state) state)))
 
 (define getInstanceClosureNew
   (lambda (instanceCode state)
