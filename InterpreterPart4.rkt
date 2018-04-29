@@ -149,13 +149,28 @@
   (lambda (func state break continue return throw currentClass instance)
     (addFunctionToState func state)))
 
-;returns the state after a function is called
 (define M_state_funcall
+  (lambda (funcall state break continue return throw currentClass instance)
+    (cond
+      ((list? (firstOfRest funcall)) (M_state_funcall_helper (cons 'funcall (cons (firstOfRestOfRest (firstOfRest funcall)) (restOfRest funcall)))
+                                                             (car (addFieldsToState (first (getInstanceFields (firstOfRest (firstOfRest funcall)) state)) (addToState (firstOfRest (firstOfRest funcall)) (getValueFromState (firstOfRest (firstOfRest funcall)) state) (getFunctions currentClass state))))
+                                                             break continue return throw currentClass instance))
+      (else (M_state_funcall_helper funcall state break continue return throw currentClass instance)))))
+
+(define addFieldsToState
+  (lambda (fields state)
+    (cond
+      ((null? (getVarLis fields)) (cons state '()))
+      (else (addFieldsToState (list (rest (getVarLis fields)) (rest (getValLis fields))) (addToState (first (getVarLis fields)) (unbox (first (getValLis fields))) state))))))
+
+;returns the state after a function is called
+(define M_state_funcall_helper
   (lambda (funcall state break continue return throw currentClass instance)
     (call/cc
      (lambda (funcState)
        (append (firstOfRest (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
-                                                (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw currentClass instance) break continue (lambda (v) (funcState state)) (lambda (v s) (throw v state) currentClass instance))))))))
+                                                (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw currentClass instance) break continue
+                                                (lambda (v) (funcState state)) (lambda (v s) (throw v state) currentClass instance) currentClass instance)))))))
 
 ;returns the state after a class is declared
 (define M_state_class
@@ -276,6 +291,7 @@
       ((eq? '!= (operator lis)) (not (eq? (M_value_comp (operand1 lis) state break continue return throw currentClass instance) (M_value_comp (operand2 lis) state break continue return throw currentClass instance))))
       (else (M_value_expr lis state break continue return throw currentClass instance)))))
 
+;change state for dot
 (define M_value_funcall
   (lambda (funcall state break contine return throw currentClass instance)
     (cond
