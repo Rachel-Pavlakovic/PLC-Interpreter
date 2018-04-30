@@ -82,8 +82,15 @@
     ;(replaceInState var (M_value_expr expr (M_state_expr expr state) break continue return throw currentClass instance) (M_state_expr expr state))))
     (replaceInState var expr state)))
 
-;M_state_assign when a variable is already declared, and its value is being redefined
 (define M_state_assign
+  (lambda (var expr state break continue return throw currentClass instance)
+    (cond
+      ((list? var) (replaceInState (firstOfRest var) (list (getInstanceClass (firstOfRest var) state) (M_state_assign_helper (firstOfRestOfRest var) (M_value_expr expr state break continue return throw currentClass instance) (getInstanceFieldList (firstOfRest var) state) break continue return throw currentClass instance) 
+                                                                         (getInstanceFieldsParent (firstOfRest var) state)) state))
+      (else (M_state_assign_helper (var expr state break continue return throw currentClass instance))))))
+
+;M_state_assign when a variable is already declared, and its value is being redefined
+(define M_state_assign_helper
   (lambda (var expr state break continue return throw currentClass instance)
     (cond
       ((and (isDeclared var state) (eq? var expr)) state)
@@ -152,8 +159,10 @@
 (define M_state_funcall
   (lambda (funcall state break continue return throw currentClass instance)
     (cond
-      ((list? (firstOfRest funcall)) (M_state_funcall_helper (cons 'funcall (cons (firstOfRestOfRest (firstOfRest funcall)) (restOfRest funcall)))
-                                                             (car (addFieldsToState (first (getInstanceFields (firstOfRest (firstOfRest funcall)) state)) (addToState (firstOfRest (firstOfRest funcall)) (getValueFromState (firstOfRest (firstOfRest funcall)) state) (getFunctions currentClass state))))
+      ((list? (firstOfRest funcall)) (M_state_funcall_dot (cons 'funcall (cons (firstOfRestOfRest (firstOfRest funcall)) (restOfRest funcall)))
+                                                             (addToState 'this (getValueFromState 'this state) (car (addFieldsToState (first (getInstanceFields (firstOfRest (firstOfRest funcall)) state)) (addToState (firstOfRest (firstOfRest funcall))
+                                                                                                                                                                                                                        (getValueFromState (firstOfRest (firstOfRest funcall)) state)
+                                                                                                                                                                                                                        (car (addFieldsToState (first (getFunctions currentClass state)) state))))))
                                                              break continue return throw currentClass instance))
       (else (M_state_funcall_helper funcall state break continue return throw currentClass instance)))))
 
@@ -170,6 +179,15 @@
      (lambda (funcState)
        (append (firstOfRest (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
                                                 (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw currentClass instance) break continue
+                                                (lambda (v) (funcState state)) (lambda (v s) (throw v state) currentClass instance) currentClass instance)))))))
+
+;returns the state after a function is called
+(define M_state_funcall_dot
+  (lambda (funcall state break continue return throw currentClass instance)
+    (call/cc
+     (lambda (funcState)
+       (append state (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
+                                                (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) state state break continue return throw currentClass instance) break continue
                                                 (lambda (v) (funcState state)) (lambda (v s) (throw v state) currentClass instance) currentClass instance)))))))
 
 ;returns the state after a class is declared
@@ -296,8 +314,10 @@
   (lambda (funcall state break contine return throw currentClass instance)
     (cond
       ((not (list? (firstOfRest funcall))) (M_value_funcall_helper funcall state break contine return throw currentClass instance))
-      (else (M_value_funcall_helper (cons 'funcall (cons (firstOfRestOfRest (firstOfRest funcall)) (restOfRest funcall)))
-                                    (addToState 'this (getValueFromState 'this state) (addToState (firstOfRestOfRest (firstOfRest funcall)) (getValueFromState (firstOfRestOfRest (firstOfRest funcall)) (getFunctions (getInstanceClass (firstOfRest (firstOfRest funcall)) state) state)) (getInstanceFields (firstOfRest (firstOfRest funcall)) state)))
+      (else (M_value_funcall_dot (cons 'funcall (cons (firstOfRestOfRest (firstOfRest funcall)) (restOfRest funcall)))
+                                    (addToState 'this (getValueFromState 'this state) (addToState (firstOfRestOfRest (firstOfRest funcall))
+                                                                                                  (getValueFromState (firstOfRestOfRest (firstOfRest funcall)) (getFunctions (getInstanceClass (firstOfRest (firstOfRest funcall)) state) state))
+                                                                                                  (first (addFieldsToState (first (getInstanceFields (firstOfRest (firstOfRest funcall)) state)) state))))
                                     break contine return throw (getInstanceFields (firstOfRest (firstOfRest funcall)) state) (getValueFromState 'this state))))))
 
 ;returns the value of a function call
@@ -308,6 +328,15 @@
        (append (firstOfRest (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
                                                 (addToState 'this instance (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall)
                                                                (first (stripLayers (getFuncLayers (firstOfRest funcall) state) state)) state break continue return throw currentClass instance))
+                                                break continue funcReturn (lambda (v s) (throw v state) currentClass instance) currentClass instance)))))))
+;returns the value of a function call
+(define M_value_funcall_dot
+  (lambda (funcall state break continue return throw currentClass instance)
+    (call/cc
+     (lambda (funcReturn)
+       (append state (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
+                                                (addToState 'this instance (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall)
+                                                               state state break continue return throw currentClass instance))
                                                 break continue funcReturn (lambda (v s) (throw v state) currentClass instance) currentClass instance)))))))
 
 ;returns the value of a dot call (ex a.add())
@@ -475,7 +504,7 @@
   (lambda (instanceCode state)
     (cond
       ((eq? (getParentClass (firstOfRest instanceCode) state) 'NULL) (list (firstOfRest instanceCode) (getInstanceFields (firstOfRest instanceCode) state) '(()())))
-      (else (list (firstOfRest instanceCode) (getInstanceFields (firstOfRest instanceCode) state) (getInstanceFields (getParentClass (firstOfRest instanceCode) state)))))))
+      (else (list (firstOfRest instanceCode) (getInstanceFields (firstOfRest instanceCode) state) (getInstanceFields (getParentClass (firstOfRest instanceCode) state)state))))))
     
 ;creates the environment for a function
 (define createFuncEnv
