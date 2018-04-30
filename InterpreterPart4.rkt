@@ -1,4 +1,4 @@
-;Group 2
+; Group 2
 ; - Jonathan Henley
 ; - Rachel Pavlakovic
 ; - Shannon Stork
@@ -10,7 +10,7 @@
   (lambda (fileName classname)
     (call/cc
      (lambda (return)
-       (parseRecurse (parser fileName) classname '((() ())) (lambda (v1) (error "Invalid use of break")) (lambda (v2) (error "Invalid use of continue")) return (lambda (v3 v4) (error "Invalid use of throw")) '() '() )))))
+       (parseRecurse (parser fileName) (string->symbol classname) '((() ())) (lambda (v1) (error "Invalid use of break")) (lambda (v2) (error "Invalid use of continue")) return (lambda (v3 v4) (error "Invalid use of throw")) '() '() )))))
 
 ;Parserecurse recurses through parsed code and returns the return value
 (define parseRecurse
@@ -79,9 +79,9 @@
 ;M_state_dec&assign when a variable is declared and assigned in the same line of code, this adds both the variable and value to the state
 (define M_state_dec&assign
   (lambda (var expr state break continue return throw currentClass instance)
-    ;(replaceInState var (M_value_expr expr (M_state_expr expr state) break continue return throw currentClass instance) (M_state_expr expr state))))
     (replaceInState var expr state)))
 
+;M_state_assign when a variable is already declared, and its value is being redefined
 (define M_state_assign
   (lambda (var expr state break continue return throw currentClass instance)
     (cond
@@ -89,7 +89,7 @@
                                                                          (getInstanceFieldsParent (firstOfRest var) state)) state))
       (else (M_state_assign_helper (var expr state break continue return throw currentClass instance))))))
 
-;M_state_assign when a variable is already declared, and its value is being redefined
+;M_state_assign_helper called from M_state_assign with updated state
 (define M_state_assign_helper
   (lambda (var expr state break continue return throw currentClass instance)
     (cond
@@ -152,10 +152,12 @@
         (removeLayerFromState (parseRecurseBlock (firstOfRestOfRestOfRest func) (addLayerToState state) break continue return throw currentClass instance))
         (addFunctionToState func state))))
 
+;adds static functions (the main method) to the state
 (define M_state_static_func
   (lambda (func state break continue return throw currentClass instance)
     (addFunctionToState func state)))
 
+;returns the state after a function is called
 (define M_state_funcall
   (lambda (funcall state break continue return throw currentClass instance)
     (cond
@@ -166,13 +168,8 @@
                                                              break continue return throw currentClass instance))
       (else (M_state_funcall_helper funcall state break continue return throw currentClass instance)))))
 
-(define addFieldsToState
-  (lambda (fields state)
-    (cond
-      ((null? (getVarLis fields)) (cons state '()))
-      (else (addFieldsToState (list (rest (getVarLis fields)) (rest (getValLis fields))) (addToState (first (getVarLis fields)) (unbox (first (getValLis fields))) state))))))
 
-;returns the state after a function is called
+;called from M_state_funcall with updated state
 (define M_state_funcall_helper
   (lambda (funcall state break continue return throw currentClass instance)
     (call/cc
@@ -186,15 +183,16 @@
   (lambda (funcall state break continue return throw currentClass instance)
     (call/cc
      (lambda (funcState)
-       (append state (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
+       (removeLayerFromState (parseRecurseBlock (getFuncBody (firstOfRest funcall) state)
                                                 (createFuncEnv (getFuncParams (firstOfRest funcall) state) (restOfRest funcall) state state break continue return throw currentClass instance) break continue
-                                                (lambda (v) (funcState state)) (lambda (v s) (throw v state) currentClass instance) currentClass instance)))))))
+                                                (lambda (v) (funcState state)) (lambda (v s) (throw v state) currentClass instance) currentClass instance))))))
 
 ;returns the state after a class is declared
 (define M_state_class
   (lambda (class state break continue return throw currentClass instance)
     (addInstanceToState (list 'this (list 'new (firstOfRest class))) (addClassToState class state break continue return throw currentClass instance))))
 
+;adds a new instance to the state when a new variable is declared
 (define M_state_new
   (lambda (exp state break continue return throw currentClass instance)
     (addInstanceToState exp state)))
@@ -495,11 +493,12 @@
   (lambda (classCode state break continue return throw currentClass instance)
     (addToState (firstOfRest classCode) (getClassClosure classCode state break continue return throw currentClass instance) state)))
 
-; '((class) (instance fields of class) (instance fields of parent))
+;adds an instance to the state with closure of the form '((class) (instance fields of class) (instance fields of parent))
 (define addInstanceToState
   (lambda (instanceDec state)
     (addToState (first instanceDec) (getInstanceClosureNew (firstOfRest instanceDec) state) state)))
 
+;creates a new instance closure
 (define getInstanceClosureNew
   (lambda (instanceCode state)
     (cond
@@ -521,6 +520,7 @@
   (lambda (classCode state break continue return throw currentClass instance)
     (list (firstOfRestOfRest classCode) (getInstanceClosure (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw currentClass instance) (getFuncClosures (firstOfRestOfRestOfRest classCode) '((()())) break continue return throw currentClass instance))))
 
+;looks up the instance closure in the state
 (define getInstanceClosure
   (lambda (classBody state break continue return throw currentClass instance)
     (cond
@@ -528,6 +528,7 @@
       ((eq? (firstOfFirst classBody) 'var) (getInstanceClosure (rest classBody) (M_state (first classBody) state break continue return throw currentClass instance) break continue return throw currentClass instance))
       (else (getInstanceClosure (rest classBody) state break continue return throw currentClass instance)))))
 
+;looks up the function closure in the state
 (define getFuncClosures
   (lambda (classBody state break continue return throw currentClass instance)
     (cond
@@ -540,14 +541,17 @@
   (lambda (functionCode state)
      (list (firstOfRestOfRest functionCode) (firstOfRestOfRestOfRest functionCode) (getNumLayers state))))
 
+;returns the instance's class
 (define getInstanceClass
   (lambda (instanceName state)
     (first (getValueFromState instanceName state))))
 
+;returns the instance's field list
 (define getInstanceFieldList
   (lambda (instanceName state)
     (firstOfRest (getValueFromState instanceName state))))
 
+;returns the parent's instance field list
 (define getInstanceFieldsParent
   (lambda (instanceName state)
     (firstOfRestOfRest (getValueFromState instanceName state))))
@@ -569,6 +573,13 @@
   (lambda (className state)
     (firstOfRestOfRest (getValueFromState className state))))
 
+;adds all fields from a state layer to the state
+(define addFieldsToState
+  (lambda (fields state)
+    (cond
+      ((null? (getVarLis fields)) (cons state '()))
+      (else (addFieldsToState (list (rest (getVarLis fields)) (rest (getValLis fields))) (addToState (first (getVarLis fields)) (unbox (first (getValLis fields))) state))))))
+
 ;returns the number of layers
 (define getNumLayers
   (lambda (state)
@@ -588,7 +599,6 @@
   (lambda (num state)
     (cond
       ((eq? 0 num) (list state '()))
-      ;((and (eq? (getNumLevels (cadr (stripLayersHelper (- num 1) (rest state)))) 1) (not (null? (cadr (stripLayersHelper (- num 1) (rest state)))))) (list (first (stripLayersHelper (- num 1) (rest state))) (list (first state))))
       ((null? (firstOfRest (stripLayersHelper (- num 1) (rest state)))) (list (first (stripLayersHelper (- num 1) (rest state))) (first state)))
       (else (list (first (stripLayersHelper (- num 1) (rest state))) (list (cadr (stripLayersHelper (- num 1) (rest state))) (first state)))))))
 
@@ -602,14 +612,11 @@
   (lambda (state)
     (cond
       ((null? state) 1)
-      ;((null? (rest state)) 1)
       (else (+ 1 (getNumLevels (first state)))))))
 
 ;makes a new state by adding the function closure to the top layer of the state
 (define getStateFromFunc
   (lambda (functionCode state)
-    ;uncomment the following line to add things from the body if needed
-    ;(addBody (firstOfRestOfRestOfRest functionCode) (addParams (firstOfRestOfRest functionCode) state))))
     (addParams (firstOfRestOfRest functionCode) state)))
 
 ;adds the formal parammeters to the state as 'NULL
@@ -713,6 +720,7 @@
                                                              (list (getVarLis state) (cons (first (getValLis state)) (rest (getValLis state))))))
       (else (list (cons (first (getVarLis state)) (first (replaceInStateHelper var val (list (restOfFirst state) (cdadr state)))))
                   (cons (first (getValLis state)) (firstOfRest (replaceInStateHelper var val (list (restOfFirst state) (cdadr state))))))))))
+
 ;-----------------------------------------------------------------------------------------------------------------------
 ;                                            Abstractions
 ;-----------------------------------------------------------------------------------------------------------------------
